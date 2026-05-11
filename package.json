@@ -1,0 +1,13 @@
+{
+  "name": "kptc-reporting-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Railway deployment wrapper for the KPTC Reporting Platform API.",
+  "scripts": {
+    "build": "npm --prefix server ci",
+    "start": "npm --prefix server start"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

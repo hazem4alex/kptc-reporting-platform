@@ -187,10 +187,10 @@ The `.env` files are ignored and must not be committed.
 
 ### Railway API Service
 
-Create a Railway service from the GitHub repository. This repository includes `railway.json`, which tells Railway to deploy the API from `server/`:
+Create a Railway service from the GitHub repository. This repository includes `railway.json`, which tells Railway to deploy the API from `server/` through the root package scripts:
 
-- Build command: `cd server && npm ci`
-- Start command: `cd server && npm start`
+- Build command: `npm run build`
+- Start command: `npm start`
 - Healthcheck path: `/health`
 
 Set these Railway service variables:
