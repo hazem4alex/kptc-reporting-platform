@@ -219,11 +219,15 @@ You can still deploy the API to Render as a Web Service:
 
 The dashboard can be deployed as a separate static site on Railway, Render, Vercel, Netlify, or any static hosting provider:
 
+Railway service settings:
+
 - Root directory: `web`
 - Build command: `npm install && npm run build`
-- Publish directory: `dist`
+- Start command: `npm start`
 - Environment:
-  - `VITE_API_BASE_URL`: your deployed API URL
+  - `VITE_API_BASE_URL`: `https://kptc-reporting-platform-production.up.railway.app`
+
+Vite reads `VITE_API_BASE_URL` during the build, so redeploy the web service after changing it.
 
 ## Production Checklist
 
