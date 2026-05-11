@@ -5,6 +5,23 @@ import { parseDateTime, parseNumeric, parsePositiveInt, requiredString } from ".
 
 export const router = express.Router();
 
+router.get("/", (req, res) => {
+  res.json({
+    success: true,
+    service: "KPTC Reporting API",
+    status: "ok",
+    endpoints: {
+      health: "/health",
+      summary: "/api/reports/summary",
+      daily: "/api/reports/daily",
+      devices: "/api/reports/devices",
+      transactions: "/api/reports/transactions",
+      cardTypes: "/api/reports/card-types",
+      latestBusLocations: "/api/reports/bus-locations/latest"
+    }
+  });
+});
+
 router.get("/health", async (req, res, next) => {
   try {
     await pool.query("SELECT 1");
