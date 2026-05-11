@@ -7,13 +7,14 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "start": "vite preview --host 0.0.0.0 --port ${PORT:-4173}"
+    "start": "sirv dist --host 0.0.0.0 --port ${PORT:-4173} --single"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.7",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sirv-cli": "^3.0.1",
+    "vite": "^6.0.7"
   },
   "devDependencies": {},
   "engines": {
