@@ -195,9 +195,11 @@ Create a Railway service from the GitHub repository. This repository includes `r
 
 Set these Railway service variables:
 
-- `DATABASE_URL`: your Railway PostgreSQL connection string
+- `DATABASE_URL`: `${{Postgres.DATABASE_URL}}` if the database service is named `Postgres`
 - `API_KEY`: a long random secret used by device write requests
 - `PORT`: leave unset; Railway injects it automatically
+
+Use Railway's variable autocomplete if your PostgreSQL service has a different name. The referenced `DATABASE_URL` keeps API-to-database traffic on Railway's private network. Do not use the `*.proxy.rlwy.net` TCP proxy URL for the deployed API unless you intentionally want an external database connection.
 
 The server runs schema creation on startup.
 
