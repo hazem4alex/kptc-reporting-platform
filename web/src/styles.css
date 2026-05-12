@@ -560,9 +560,10 @@ main {
 .page {
   display: grid;
   gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0 auto;
   max-width: 1560px;
-  overflow-x: hidden;
+  min-width: 0;
   width: 100%;
 }
 
@@ -1307,8 +1308,72 @@ td:nth-child(4) {
     display: block;
   }
 
-  main {
+  html, body {
+    max-width: 100vw;
     overflow-x: hidden;
+    width: 100%;
+  }
+
+  .app-shell {
+    display: block;
+    width: 100%;
+  }
+
+  main {
+    box-sizing: border-box;
+    max-width: 100vw;
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  main > .topbar,
+  main > .page {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  main .row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  /* Force single-column layout for custom CSS grids on mobile */
+  .hero-dashboard,
+  .page-header {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .filter-bar,
+  .filter-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .donut-layout,
+  .pie-layout {
+    grid-template-columns: 1fr !important;
+    justify-items: center;
+  }
+
+  .segmented-control {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .last-sync,
+  .transaction-summary {
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .hero-copy {
+    max-width: 100%;
+  }
+
+  /* Prevent table min-width from inflating parent */
+  .table-wrap {
+    max-width: 100%;
+    min-width: 0;
     width: 100%;
   }
 

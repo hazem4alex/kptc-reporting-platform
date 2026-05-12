@@ -140,19 +140,19 @@ export function Overview({ data, t }) {
       </section>
 
       <div className="row g-3">
-        <div className="col-6 col-md-4 col-xl">
+        <div className="col-12 col-sm-6 col-md-4 col-xl">
           <KpiCard label={t("filteredTransactions")} value={count(displayedTrips)} tone="green" />
         </div>
-        <div className="col-6 col-md-4 col-xl">
+        <div className="col-12 col-sm-6 col-md-4 col-xl">
           <KpiCard label={t("filteredRevenue")} value={kwd(displayedRevenue)} tone="blue" />
         </div>
-        <div className="col-6 col-md-4 col-xl">
+        <div className="col-12 col-sm-6 col-md-4 col-xl">
           <KpiCard label={t("averageFare")} value={kwd(avgFare)} tone="amber" />
         </div>
-        <div className="col-6 col-md-4 col-xl">
+        <div className="col-12 col-sm-6 col-md-4 col-xl">
           <KpiCard label={t("peakRevenueDay")} value={peakDay.date ? day(peakDay.date) : "-"} tone="red" />
         </div>
-        <div className="col-12 col-md-4 col-xl">
+        <div className="col-12 col-sm-6 col-md-4 col-xl">
           <KpiCard label={t("activeDevices")} value={count(activeDevices || summary.active_devices)} />
         </div>
       </div>
