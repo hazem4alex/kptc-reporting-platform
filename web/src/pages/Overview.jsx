@@ -1,6 +1,6 @@
 import { KpiCard } from "../components/KpiCard.jsx";
 import { Table } from "../components/Table.jsx";
-import { count, dateTime, day, kwd } from "../format.js";
+import { count, day, kwd } from "../format.js";
 
 export function Overview({ data }) {
   const summary = data.summary || {};
@@ -12,7 +12,7 @@ export function Overview({ data }) {
           <p className="eyebrow">Operations dashboard</p>
           <h1>KPTC Reporting Platform</h1>
         </div>
-        <div className="last-sync">Last transaction: {dateTime(summary.last_transaction_at)}</div>
+        <div className="last-sync">Last transaction: {summary.last_transaction_kuwait || "-"}</div>
       </div>
 
       <div className="kpi-grid">
@@ -29,7 +29,7 @@ export function Overview({ data }) {
             rows={(data.transactions || []).slice(0, 8)}
             getKey={(row) => row.id}
             columns={[
-              { key: "transaction_datetime", label: "Time", render: (row) => dateTime(row.transaction_datetime) },
+              { key: "transaction_datetime_kuwait", label: "Transaction Time", render: (row) => row.transaction_datetime_kuwait || "-" },
               { key: "device_id", label: "Device" },
               { key: "card_no", label: "Card" },
               { key: "amount_display_kwd", label: "Amount", render: (row) => kwd(row.amount_display_kwd) }

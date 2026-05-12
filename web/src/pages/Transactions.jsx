@@ -15,7 +15,8 @@ export function Transactions({ rows }) {
           rows={rows}
           getKey={(row) => row.id}
           columns={[
-            { key: "transaction_datetime", label: "Transaction time", render: (row) => dateTime(row.transaction_datetime) },
+            { key: "transaction_datetime_kuwait", label: "Transaction Time", render: (row) => row.transaction_datetime_kuwait || "-" },
+            { key: "received_at", label: "Upload Time", render: (row) => dateTime(row.received_at) },
             { key: "device_id", label: "Device" },
             { key: "record_uid", label: "Record UID" },
             { key: "card_no", label: "Card" },

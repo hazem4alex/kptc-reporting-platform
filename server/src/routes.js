@@ -1,9 +1,24 @@
 import express from "express";
 import { pool } from "./db.js";
 import { requireApiKey } from "./middleware.js";
-import { parseDateTime, parseNumeric, parsePositiveInt, requiredString } from "./utils.js";
+import { parseDateTime, parseNumeric, parsePositiveInt, parseRawGmtToKuwait, requiredString } from "./utils.js";
 
 export const router = express.Router();
+
+const rawGmtToKuwaitSql = `
+  CASE
+    WHEN transaction_datetime_raw ~ '^\\d{14}$' THEN
+      make_timestamp(
+        substring(transaction_datetime_raw from 1 for 4)::int,
+        substring(transaction_datetime_raw from 5 for 2)::int,
+        substring(transaction_datetime_raw from 7 for 2)::int,
+        substring(transaction_datetime_raw from 9 for 2)::int,
+        substring(transaction_datetime_raw from 11 for 2)::int,
+        substring(transaction_datetime_raw from 13 for 2)::int
+      ) + interval '3 hours'
+    ELSE NULL
+  END
+`;
 
 router.get("/", (req, res) => {
   res.json({
@@ -182,14 +197,26 @@ router.post("/api/buses/location", requireApiKey, async (req, res, next) => {
 router.get("/api/reports/summary", async (req, res, next) => {
   try {
     const result = await pool.query(`
+      WITH normalized AS (
+        SELECT
+          amount_display_kwd,
+          transaction_datetime,
+          ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+        FROM transactions
+      )
       SELECT
         COUNT(*)::bigint AS total_transactions,
         COALESCE(SUM(amount_display_kwd), 0)::numeric(14,3) AS total_revenue_kwd,
-        COUNT(*) FILTER (WHERE transaction_datetime >= CURRENT_DATE)::bigint AS today_transactions,
-        COALESCE(SUM(amount_display_kwd) FILTER (WHERE transaction_datetime >= CURRENT_DATE), 0)::numeric(14,3) AS today_revenue_kwd,
+        COUNT(*) FILTER (
+          WHERE transaction_datetime_kuwait_ts::date = (now() AT TIME ZONE 'Asia/Kuwait')::date
+        )::bigint AS today_transactions,
+        COALESCE(SUM(amount_display_kwd) FILTER (
+          WHERE transaction_datetime_kuwait_ts::date = (now() AT TIME ZONE 'Asia/Kuwait')::date
+        ), 0)::numeric(14,3) AS today_revenue_kwd,
         (SELECT COUNT(*)::bigint FROM devices WHERE last_seen_at >= now() - interval '24 hours') AS active_devices,
-        MAX(transaction_datetime) AS last_transaction_at
-      FROM transactions
+        MAX(transaction_datetime) AS last_transaction_at,
+        to_char(MAX(transaction_datetime_kuwait_ts), 'YYYY-MM-DD HH24:MI:SS') AS last_transaction_kuwait
+      FROM normalized
     `);
 
     res.json({ success: true, data: result.rows[0] });
@@ -203,14 +230,21 @@ router.get("/api/reports/daily", async (req, res, next) => {
     const { from, to } = req.query;
     const result = await pool.query(
       `
+        WITH normalized AS (
+          SELECT
+            amount_display_kwd,
+            ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+          FROM transactions
+        )
         SELECT
-          transaction_datetime::date AS date,
+          to_char(transaction_datetime_kuwait_ts::date, 'YYYY-MM-DD') AS date,
           COUNT(*)::bigint AS transaction_count,
           COALESCE(SUM(amount_display_kwd), 0)::numeric(14,3) AS revenue_kwd
-        FROM transactions
-        WHERE ($1::date IS NULL OR transaction_datetime >= $1::date)
-          AND ($2::date IS NULL OR transaction_datetime < ($2::date + interval '1 day'))
-        GROUP BY transaction_datetime::date
+        FROM normalized
+        WHERE transaction_datetime_kuwait_ts IS NOT NULL
+          AND ($1::date IS NULL OR transaction_datetime_kuwait_ts::date >= $1::date)
+          AND ($2::date IS NULL OR transaction_datetime_kuwait_ts::date <= $2::date)
+        GROUP BY transaction_datetime_kuwait_ts::date
         ORDER BY date DESC
       `,
       [from || null, to || null]
@@ -253,17 +287,28 @@ router.get("/api/reports/transactions", async (req, res, next) => {
 
     const rows = await pool.query(
       `
+        WITH normalized AS (
+          SELECT
+            id, record_uid, device_id, record_index, sequence_no, card_no, card_type,
+            card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
+            amount_display_kwd, amount_copy_raw, transaction_datetime,
+            transaction_datetime_raw, record_type, sub_type, crc, source_file, received_at,
+            ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+          FROM transactions
+        )
         SELECT
           id, record_uid, device_id, record_index, sequence_no, card_no, card_type,
           card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
           amount_display_kwd, amount_copy_raw, transaction_datetime,
-          transaction_datetime_raw, record_type, sub_type, crc, source_file, received_at
-        FROM transactions
+          transaction_datetime_raw,
+          to_char(transaction_datetime_kuwait_ts, 'YYYY-MM-DD HH24:MI:SS') AS transaction_datetime_kuwait,
+          record_type, sub_type, crc, source_file, received_at
+        FROM normalized
         WHERE ($1::text IS NULL OR device_id = $1)
           AND ($2::text IS NULL OR card_no = $2)
-          AND ($3::date IS NULL OR transaction_datetime >= $3::date)
-          AND ($4::date IS NULL OR transaction_datetime < ($4::date + interval '1 day'))
-        ORDER BY transaction_datetime DESC NULLS LAST, received_at DESC
+          AND ($3::date IS NULL OR transaction_datetime_kuwait_ts::date >= $3::date)
+          AND ($4::date IS NULL OR transaction_datetime_kuwait_ts::date <= $4::date)
+        ORDER BY transaction_datetime_kuwait_ts DESC NULLS LAST, received_at DESC
         LIMIT $5 OFFSET $6
       `,
       [deviceId || null, cardNo || null, from || null, to || null, limit, offset]
@@ -271,19 +316,30 @@ router.get("/api/reports/transactions", async (req, res, next) => {
 
     const count = await pool.query(
       `
+        WITH normalized AS (
+          SELECT
+            device_id,
+            card_no,
+            ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+          FROM transactions
+        )
         SELECT COUNT(*)::bigint AS total
-        FROM transactions
+        FROM normalized
         WHERE ($1::text IS NULL OR device_id = $1)
           AND ($2::text IS NULL OR card_no = $2)
-          AND ($3::date IS NULL OR transaction_datetime >= $3::date)
-          AND ($4::date IS NULL OR transaction_datetime < ($4::date + interval '1 day'))
+          AND ($3::date IS NULL OR transaction_datetime_kuwait_ts::date >= $3::date)
+          AND ($4::date IS NULL OR transaction_datetime_kuwait_ts::date <= $4::date)
       `,
       [deviceId || null, cardNo || null, from || null, to || null]
     );
 
     res.json({
       success: true,
-      data: rows.rows,
+      data: rows.rows.map((row) => ({
+        ...row,
+        transaction_datetime_kuwait:
+          row.transaction_datetime_kuwait || parseRawGmtToKuwait(row.transaction_datetime_raw)
+      })),
       pagination: {
         limit,
         offset,
