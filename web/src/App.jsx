@@ -51,6 +51,14 @@ export default function App() {
   });
   const [collapsed, setCollapsed] = useState(() => readStored("kptc_sidebar", "open") === "collapsed");
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    function onResize() {
+      if (window.innerWidth > 991) setMobileOpen(false);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [theme, setTheme] = useState(() => readStored("kptc_theme", "dark"));
   const [language, setLanguage] = useState(() => readStored("kptc_language", "en"));
   const t = useMemo(() => createTranslator(language), [language]);
