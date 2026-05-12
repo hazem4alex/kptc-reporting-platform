@@ -11,16 +11,31 @@ import { Transactions } from "./pages/Transactions.jsx";
 import { Users } from "./pages/Users.jsx";
 
 const nav = [
-  { id: "overview", label: "overview" },
-  { id: "transactions", label: "transactions" },
-  { id: "devices", label: "devices" },
-  { id: "card-types", label: "cardTypes" },
-  { id: "live-map", label: "liveMap" },
-  { id: "users", label: "users" }
+  { id: "overview",     label: "overview",     icon: "◈" },
+  { id: "transactions", label: "transactions",  icon: "≋" },
+  { id: "devices",      label: "devices",       icon: "◉" },
+  { id: "card-types",   label: "cardTypes",     icon: "▣" },
+  { id: "live-map",     label: "liveMap",       icon: "⊕" },
+  { id: "users",        label: "users",         icon: "◯" }
 ];
 
 function readStored(key, fallback) {
   return localStorage.getItem(key) || fallback;
+}
+
+function LiveClock() {
+  const [time, setTime] = useState(() =>
+    new Date().toLocaleTimeString("en-US", { hour12: false, timeZone: "Asia/Kuwait" })
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date().toLocaleTimeString("en-US", { hour12: false, timeZone: "Asia/Kuwait" }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return <span className="live-clock">{time} KWT</span>;
 }
 
 export default function App() {
@@ -35,7 +50,7 @@ export default function App() {
     return token && user ? { token, user: JSON.parse(user) } : null;
   });
   const [collapsed, setCollapsed] = useState(() => readStored("kptc_sidebar", "open") === "collapsed");
-  const [theme, setTheme] = useState(() => readStored("kptc_theme", "light"));
+  const [theme, setTheme] = useState(() => readStored("kptc_theme", "dark"));
   const [language, setLanguage] = useState(() => readStored("kptc_language", "en"));
   const t = useMemo(() => createTranslator(language), [language]);
 
@@ -92,14 +107,12 @@ export default function App() {
 
   const page = useMemo(() => {
     if (!data) return null;
-    if (active === "transactions") return <Transactions rows={data.transactions} />;
-    if (active === "devices") return <Devices rows={data.devices} />;
-    if (active === "card-types") return <CardTypes rows={data.cardTypes} />;
-    if (active === "live-map") return <LiveMap rows={data.locations} />;
-    if (active === "users") {
-      return <Users rows={users} t={t} onCreateUser={createUser} />;
-    }
-    return <Overview data={data} />;
+    if (active === "transactions") return <Transactions rows={data.transactions} t={t} />;
+    if (active === "devices") return <Devices rows={data.devices} t={t} />;
+    if (active === "card-types") return <CardTypes rows={data.cardTypes} t={t} />;
+    if (active === "live-map") return <LiveMap rows={data.locations} t={t} />;
+    if (active === "users") return <Users rows={users} t={t} onCreateUser={createUser} />;
+    return <Overview data={data} t={t} />;
   }, [active, data, t, users]);
 
   async function handleLogin(event) {
@@ -140,12 +153,18 @@ export default function App() {
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <div className="brand">
-          <img alt="KPTC logo" src="https://www.kptc.com.kw/img/logo.png" />
-          <div>
-            <strong>KPTC</strong>
-            <span>{t("reportingPlatform")}</span>
+        <div className="sidebar-header">
+          <div className="brand">
+            <img alt="KPTC logo" src="https://www.kptc.com.kw/img/logo.png" />
           </div>
+          <button
+            className="sidebar-collapse-btn"
+            type="button"
+            title={collapsed ? t("expand") : t("collapse")}
+            onClick={() => setCollapsed((v) => !v)}
+          >
+            {collapsed ? "›" : "‹"}
+          </button>
         </div>
         <nav>
           {nav.map((item) => (
@@ -156,7 +175,7 @@ export default function App() {
               type="button"
               onClick={() => setActive(item.id)}
             >
-              <b aria-hidden="true">{t(item.label).slice(0, 1)}</b>
+              <b aria-hidden="true">{item.icon}</b>
               <span>{t(item.label)}</span>
             </button>
           ))}
@@ -164,21 +183,20 @@ export default function App() {
         <div className="sidebar-feature" aria-hidden="true">
           <div />
           <strong>Kuwait fleet operations</strong>
-          <span>Live fare uploads, device health, and route activity.</span>
+          <span>Live fare uploads · device health · route activity</span>
         </div>
       </aside>
 
       <main>
         <header className="topbar">
-          <button className="icon-action" type="button" onClick={() => setCollapsed((value) => !value)}>
-            {collapsed ? t("expand") : t("collapse")}
-          </button>
           <div className="topbar-controls">
-            <select aria-label={t("language")} value={language} onChange={(event) => setLanguage(event.target.value)}>
+            <LiveClock />
+            <span className="live-badge">Live</span>
+            <select aria-label={t("language")} value={language} onChange={(e) => setLanguage(e.target.value)}>
               <option value="en">English</option>
               <option value="ar">العربية</option>
             </select>
-            <button className="icon-action" type="button" onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}>
+            <button className="icon-action" type="button" onClick={() => setTheme((v) => (v === "dark" ? "light" : "dark"))}>
               {theme === "dark" ? t("light") : t("dark")}
             </button>
             <span className="user-chip">{session.user.display_name || session.user.username}</span>

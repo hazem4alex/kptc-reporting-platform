@@ -2,21 +2,6 @@ import { useMemo, useState } from "react";
 import { Table } from "../components/Table.jsx";
 import { count, dateTime, kwd } from "../format.js";
 
-const sortOptions = [
-  { value: "latest", label: "Latest uploaded" },
-  { value: "amount-desc", label: "Amount high to low" },
-  { value: "amount-asc", label: "Amount low to high" },
-  { value: "time-desc", label: "Transaction time newest" },
-  { value: "device", label: "Device" }
-];
-
-const groupOptions = [
-  { value: "none", label: "No grouping" },
-  { value: "device_id", label: "Device" },
-  { value: "card_type", label: "Card type" },
-  { value: "date", label: "Transaction date" }
-];
-
 function transactionDate(row) {
   return String(row.transaction_datetime_kuwait || "").slice(0, 10);
 }
@@ -30,19 +15,16 @@ function compareDate(a, b, key) {
 }
 
 function groupRows(rows, groupBy) {
-  if (groupBy === "none") return [{ title: "All transactions", rows }];
-
   const groups = new Map();
   for (const row of rows) {
-    const key = groupBy === "date" ? transactionDate(row) : row[groupBy] || "Unassigned";
+    const key = groupBy === "date" ? transactionDate(row) : row[groupBy] || "__unassigned__";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   }
-
   return Array.from(groups.entries()).map(([title, group]) => ({ title, rows: group }));
 }
 
-export function Transactions({ rows = [] }) {
+export function Transactions({ rows = [], t }) {
   const [filters, setFilters] = useState({
     query: "",
     device: "all",
@@ -53,6 +35,21 @@ export function Transactions({ rows = [] }) {
     sort: "latest",
     groupBy: "none"
   });
+
+  const sortOptions = [
+    { value: "latest",      labelKey: "latestUploaded" },
+    { value: "amount-desc", labelKey: "amountHighLow" },
+    { value: "amount-asc",  labelKey: "amountLowHigh" },
+    { value: "time-desc",   labelKey: "txTimeNewest" },
+    { value: "device",      labelKey: "device" }
+  ];
+
+  const groupOptions = [
+    { value: "none",      labelKey: "noGrouping" },
+    { value: "device_id", labelKey: "device" },
+    { value: "card_type", labelKey: "cardType" },
+    { value: "date",      labelKey: "date" }
+  ];
 
   const devices = useMemo(() => Array.from(new Set(rows.map((row) => row.device_id).filter(Boolean))).sort(), [rows]);
   const cardTypes = useMemo(() => Array.from(new Set(rows.map((row) => row.card_type).filter(Boolean))).sort(), [rows]);
@@ -72,7 +69,6 @@ export function Transactions({ rows = [] }) {
         ].some((value) => includes(value, query))) {
           return false;
         }
-
         if (filters.device !== "all" && row.device_id !== filters.device) return false;
         if (filters.cardType !== "all" && row.card_type !== filters.cardType) return false;
         if (filters.from && transactionDate(row) < filters.from) return false;
@@ -89,7 +85,14 @@ export function Transactions({ rows = [] }) {
       });
   }, [filters, rows]);
 
-  const grouped = useMemo(() => groupRows(filteredRows, filters.groupBy), [filteredRows, filters.groupBy]);
+  const grouped = useMemo(() => {
+    if (filters.groupBy === "none") return [{ title: t("allTransactions"), rows: filteredRows }];
+    return groupRows(filteredRows, filters.groupBy).map((g) => ({
+      ...g,
+      title: g.title === "__unassigned__" ? t("unassigned") : g.title
+    }));
+  }, [filteredRows, filters.groupBy, t]);
+
   const totalAmount = filteredRows.reduce((total, row) => total + Number(row.amount_display_kwd || 0), 0);
 
   function updateFilter(key, value) {
@@ -100,49 +103,49 @@ export function Transactions({ rows = [] }) {
     <section className="page transactions-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Fare activity</p>
-          <h1>Transactions control grid</h1>
+          <p className="eyebrow">{t("fareActivity")}</p>
+          <h1>{t("transactionsGrid")}</h1>
         </div>
         <div className="transaction-summary">
-          <span>{count(filteredRows.length)} rows</span>
+          <span>{count(filteredRows.length)} {t("rows")}</span>
           <strong>{kwd(totalAmount)}</strong>
         </div>
       </div>
 
       <section className="filter-panel" aria-label="Transaction filters">
         <label className="field wide">
-          <span>Search</span>
+          <span>{t("search")}</span>
           <input
-            placeholder="Card, device, UID, raw time"
+            placeholder={t("searchPlaceholder")}
             type="search"
             value={filters.query}
             onChange={(event) => updateFilter("query", event.target.value)}
           />
         </label>
         <label className="field">
-          <span>Device</span>
+          <span>{t("device")}</span>
           <select value={filters.device} onChange={(event) => updateFilter("device", event.target.value)}>
-            <option value="all">All devices</option>
+            <option value="all">{t("allDevices")}</option>
             {devices.map((device) => <option key={device} value={device}>{device}</option>)}
           </select>
         </label>
         <label className="field">
-          <span>Card type</span>
+          <span>{t("cardType")}</span>
           <select value={filters.cardType} onChange={(event) => updateFilter("cardType", event.target.value)}>
-            <option value="all">All types</option>
+            <option value="all">{t("allTypes")}</option>
             {cardTypes.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
         </label>
         <label className="field">
-          <span>From</span>
+          <span>{t("from")}</span>
           <input type="date" value={filters.from} onChange={(event) => updateFilter("from", event.target.value)} />
         </label>
         <label className="field">
-          <span>To</span>
+          <span>{t("to")}</span>
           <input type="date" value={filters.to} onChange={(event) => updateFilter("to", event.target.value)} />
         </label>
         <label className="field">
-          <span>Minimum amount</span>
+          <span>{t("minAmount")}</span>
           <input
             min="0"
             step="0.001"
@@ -152,15 +155,19 @@ export function Transactions({ rows = [] }) {
           />
         </label>
         <label className="field">
-          <span>Sort</span>
+          <span>{t("sort")}</span>
           <select value={filters.sort} onChange={(event) => updateFilter("sort", event.target.value)}>
-            {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+            ))}
           </select>
         </label>
         <label className="field">
-          <span>Group</span>
+          <span>{t("group")}</span>
           <select value={filters.groupBy} onChange={(event) => updateFilter("groupBy", event.target.value)}>
-            {groupOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {groupOptions.map((option) => (
+              <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+            ))}
           </select>
         </label>
       </section>
@@ -169,21 +176,21 @@ export function Transactions({ rows = [] }) {
         {grouped.map((group) => (
           <section className="panel" key={group.title}>
             <div className="panel-heading">
-              <h2>{group.title || "Unassigned"}</h2>
-              <span>{count(group.rows.length)} rows</span>
+              <h2>{group.title}</h2>
+              <span>{count(group.rows.length)} {t("rows")}</span>
             </div>
             <Table
               rows={group.rows}
               getKey={(row) => row.id}
               columns={[
-                { key: "transaction_datetime_kuwait", label: "Transaction Time", render: (row) => row.transaction_datetime_kuwait || "-" },
-                { key: "received_at", label: "Upload Time", render: (row) => dateTime(row.received_at) },
-                { key: "device_id", label: "Device" },
-                { key: "record_uid", label: "Record UID" },
-                { key: "card_no", label: "Card" },
-                { key: "card_type", label: "Type" },
-                { key: "amount_display_kwd", label: "Amount", render: (row) => kwd(row.amount_display_kwd) },
-                { key: "balance_display_kwd", label: "Balance", render: (row) => kwd(row.balance_display_kwd) }
+                { key: "transaction_datetime_kuwait", label: t("transactionTime"), render: (row) => row.transaction_datetime_kuwait || "-" },
+                { key: "received_at", label: t("uploadTime"), render: (row) => dateTime(row.received_at) },
+                { key: "device_id", label: t("device") },
+                { key: "record_uid", label: t("recordUid") },
+                { key: "card_no", label: t("card") },
+                { key: "card_type", label: t("type") },
+                { key: "amount_display_kwd", label: t("amount"), render: (row) => kwd(row.amount_display_kwd) },
+                { key: "balance_display_kwd", label: t("balance"), render: (row) => kwd(row.balance_display_kwd) }
               ]}
             />
           </section>

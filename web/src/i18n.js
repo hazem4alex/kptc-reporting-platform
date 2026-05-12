@@ -1,11 +1,14 @@
 export const translations = {
   en: {
+    // Navigation
     overview: "Overview",
     transactions: "Transactions",
     devices: "Devices/Buses",
     cardTypes: "Card Types",
     liveMap: "Live Map",
     users: "Users",
+
+    // App shell
     reportingPlatform: "Reporting Platform",
     signIn: "Sign in",
     username: "Username",
@@ -16,6 +19,8 @@ export const translations = {
     light: "Light",
     dark: "Dark",
     language: "Language",
+
+    // User management
     userAccess: "User access",
     createUser: "Create user",
     displayName: "Display name",
@@ -23,15 +28,104 @@ export const translations = {
     admin: "Admin",
     viewer: "Viewer",
     created: "Created",
-    lastLogin: "Last login"
+    lastLogin: "Last login",
+
+    // Common
+    from: "From",
+    to: "To",
+    all: "All",
+    search: "Search",
+    sort: "Sort",
+    group: "Group",
+    device: "Device",
+    card: "Card",
+    amount: "Amount",
+    balance: "Balance",
+    revenue: "Revenue",
+    date: "Date",
+    trips: "Trips",
+    type: "Type",
+    rows: "rows",
+    unassigned: "Unassigned",
+
+    // Overview
+    opsCommand: "Operations command",
+    fleetIntelligence: "KPTC fleet revenue intelligence",
+    heroDesc: "Fare uploads, route activity, device health, and revenue trend reporting in one control view.",
+    latestTransaction: "Latest transaction",
+    filteredTransactions: "Filtered transactions",
+    filteredRevenue: "Filtered revenue",
+    averageFare: "Average fare",
+    peakRevenueDay: "Peak revenue day",
+    activeDevices: "Active devices",
+    year: "Year",
+    month: "Month",
+    day: "Day",
+    custom: "Custom",
+    revenueTrend: "Revenue trend",
+    dailyKwd: "Daily KWD",
+    cardMix: "Card mix",
+    shareByTransactions: "Share by transactions",
+    revenueSplit: "Revenue split",
+    topFareCategories: "Top fare categories",
+    fleetGauge: "Fleet upload gauge",
+    reportingDevices: "reporting devices",
+    latestTransactionsPanel: "Latest transactions",
+    orderedByUpload: "Ordered by latest upload",
+    revenueByDay: "Revenue by day",
+    filteredRange: "Filtered reporting range",
+    transactionTime: "Transaction Time",
+
+    // Transactions
+    fareActivity: "Fare activity",
+    transactionsGrid: "Transactions control grid",
+    searchPlaceholder: "Card, device, UID, raw time",
+    allDevices: "All devices",
+    allTypes: "All types",
+    minAmount: "Minimum amount",
+    noGrouping: "No grouping",
+    allTransactions: "All transactions",
+    latestUploaded: "Latest uploaded",
+    amountHighLow: "Amount high to low",
+    amountLowHigh: "Amount low to high",
+    txTimeNewest: "Transaction time newest",
+    uploadTime: "Upload Time",
+    recordUid: "Record UID",
+    cardType: "Card type",
+
+    // Devices
+    fleetStatus: "Fleet status",
+    devicesAndBuses: "Devices and Buses",
+    bus: "Bus",
+    routeNo: "Route No.",
+    routeName: "Route Name",
+    routeExtra: "Route Extra",
+    lastSeen: "Last seen",
+    lastTransaction: "Last transaction",
+
+    // Card types
+    fareMedia: "Fare media",
+    transactionCount: "Transactions",
+
+    // Live map
+    locationFeed: "Location feed",
+    liveMapTitle: "Live Map",
+    mapPlaceholder: "Map integration placeholder",
+    locationUnavailable: "Location not available yet",
+    updated: "Updated",
+    route: "Route"
   },
+
   ar: {
+    // Navigation
     overview: "نظرة عامة",
     transactions: "المعاملات",
     devices: "الأجهزة والحافلات",
     cardTypes: "أنواع البطاقات",
     liveMap: "الخريطة المباشرة",
     users: "المستخدمون",
+
+    // App shell
     reportingPlatform: "منصة التقارير",
     signIn: "تسجيل الدخول",
     username: "اسم المستخدم",
@@ -42,6 +136,8 @@ export const translations = {
     light: "فاتح",
     dark: "داكن",
     language: "اللغة",
+
+    // User management
     userAccess: "صلاحيات المستخدمين",
     createUser: "إنشاء مستخدم",
     displayName: "الاسم المعروض",
@@ -49,7 +145,92 @@ export const translations = {
     admin: "مدير",
     viewer: "مشاهد",
     created: "تاريخ الإنشاء",
-    lastLogin: "آخر دخول"
+    lastLogin: "آخر دخول",
+
+    // Common
+    from: "من",
+    to: "إلى",
+    all: "الكل",
+    search: "بحث",
+    sort: "ترتيب",
+    group: "تجميع",
+    device: "الجهاز",
+    card: "البطاقة",
+    amount: "المبلغ",
+    balance: "الرصيد",
+    revenue: "الإيرادات",
+    date: "التاريخ",
+    trips: "الرحلات",
+    type: "النوع",
+    rows: "صف",
+    unassigned: "غير مصنّف",
+
+    // Overview
+    opsCommand: "مركز العمليات",
+    fleetIntelligence: "تقارير إيرادات أسطول KPTC",
+    heroDesc: "رفع بيانات الأجرة ونشاط المسارات وصحة الأجهزة واتجاهات الإيرادات في لوحة تحكم واحدة.",
+    latestTransaction: "آخر معاملة",
+    filteredTransactions: "المعاملات المصفاة",
+    filteredRevenue: "الإيرادات المصفاة",
+    averageFare: "متوسط الأجرة",
+    peakRevenueDay: "يوم الذروة",
+    activeDevices: "الأجهزة النشطة",
+    year: "سنة",
+    month: "شهر",
+    day: "يوم",
+    custom: "مخصص",
+    revenueTrend: "منحنى الإيرادات",
+    dailyKwd: "إيرادات يومية (د.ك)",
+    cardMix: "توزيع البطاقات",
+    shareByTransactions: "الحصة من إجمالي المعاملات",
+    revenueSplit: "تقسيم الإيرادات",
+    topFareCategories: "أعلى فئات الأجرة",
+    fleetGauge: "مقياس تحميل الأسطول",
+    reportingDevices: "جهاز مُبلِّغ",
+    latestTransactionsPanel: "آخر المعاملات",
+    orderedByUpload: "مرتب حسب آخر رفع",
+    revenueByDay: "الإيرادات اليومية",
+    filteredRange: "نطاق التقرير المصفى",
+    transactionTime: "وقت المعاملة",
+
+    // Transactions
+    fareActivity: "نشاط الأجرة",
+    transactionsGrid: "شبكة تحكم المعاملات",
+    searchPlaceholder: "بطاقة، جهاز، معرف، وقت",
+    allDevices: "جميع الأجهزة",
+    allTypes: "جميع الأنواع",
+    minAmount: "الحد الأدنى للمبلغ",
+    noGrouping: "بدون تجميع",
+    allTransactions: "جميع المعاملات",
+    latestUploaded: "آخر مرفوع",
+    amountHighLow: "المبلغ من الأعلى للأدنى",
+    amountLowHigh: "المبلغ من الأدنى للأعلى",
+    txTimeNewest: "الأحدث زمنياً",
+    uploadTime: "وقت الرفع",
+    recordUid: "معرف السجل",
+    cardType: "نوع البطاقة",
+
+    // Devices
+    fleetStatus: "حالة الأسطول",
+    devicesAndBuses: "الأجهزة والحافلات",
+    bus: "الحافلة",
+    routeNo: "رقم المسار",
+    routeName: "اسم المسار",
+    routeExtra: "بيانات إضافية",
+    lastSeen: "آخر ظهور",
+    lastTransaction: "آخر معاملة",
+
+    // Card types
+    fareMedia: "وسائط الأجرة",
+    transactionCount: "المعاملات",
+
+    // Live map
+    locationFeed: "بيانات الموقع",
+    liveMapTitle: "الخريطة المباشرة",
+    mapPlaceholder: "موقع الخريطة قيد التطوير",
+    locationUnavailable: "الموقع غير متاح بعد",
+    updated: "تم التحديث",
+    route: "المسار"
   }
 };
 

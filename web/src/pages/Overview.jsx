@@ -3,13 +3,7 @@ import { KpiCard } from "../components/KpiCard.jsx";
 import { Table } from "../components/Table.jsx";
 import { count, day, kwd } from "../format.js";
 
-const presets = [
-  { id: "all", label: "All" },
-  { id: "year", label: "Year" },
-  { id: "month", label: "Month" },
-  { id: "day", label: "Day" },
-  { id: "custom", label: "Custom" }
-];
+const presetIds = ["all", "year", "month", "day", "custom"];
 
 function toInputDate(value) {
   if (!value) return "";
@@ -63,7 +57,7 @@ function sum(rows, key) {
   return rows.reduce((total, row) => total + Number(row[key] || 0), 0);
 }
 
-export function Overview({ data }) {
+export function Overview({ data, t }) {
   const summary = data.summary || {};
   const daily = data.daily || [];
   const cardTypes = data.cardTypes || [];
@@ -98,33 +92,31 @@ export function Overview({ data }) {
     <section className="page overview-page">
       <div className="hero-dashboard">
         <div>
-          <p className="eyebrow">Operations command</p>
-          <h1>KPTC fleet revenue intelligence</h1>
-          <p className="hero-copy">
-            Fare uploads, route activity, device health, and revenue trend reporting in one control view.
-          </p>
+          <p className="eyebrow">{t("opsCommand")}</p>
+          <h1>{t("fleetIntelligence")}</h1>
+          <p className="hero-copy">{t("heroDesc")}</p>
         </div>
         <div className="last-sync">
-          <span>Latest transaction</span>
+          <span>{t("latestTransaction")}</span>
           <strong>{summary.last_transaction_kuwait || "-"}</strong>
         </div>
       </div>
 
       <section className="filter-bar" aria-label="Overview filters">
         <div className="segmented-control">
-          {presets.map((item) => (
+          {presetIds.map((id) => (
             <button
-              className={preset === item.id ? "active" : ""}
-              key={item.id}
+              className={preset === id ? "active" : ""}
+              key={id}
               type="button"
-              onClick={() => applyPreset(item.id)}
+              onClick={() => applyPreset(id)}
             >
-              {item.label}
+              {t(id)}
             </button>
           ))}
         </div>
         <label>
-          <span>From</span>
+          <span>{t("from")}</span>
           <input
             type="date"
             value={range.from}
@@ -135,7 +127,7 @@ export function Overview({ data }) {
           />
         </label>
         <label>
-          <span>To</span>
+          <span>{t("to")}</span>
           <input
             type="date"
             value={range.to}
@@ -148,50 +140,50 @@ export function Overview({ data }) {
       </section>
 
       <div className="kpi-grid">
-        <KpiCard label="Filtered transactions" value={count(displayedTrips)} tone="green" />
-        <KpiCard label="Filtered revenue" value={kwd(displayedRevenue)} tone="blue" />
-        <KpiCard label="Average fare" value={kwd(avgFare)} tone="amber" />
-        <KpiCard label="Peak revenue day" value={peakDay.date ? day(peakDay.date) : "-"} tone="red" />
-        <KpiCard label="Active devices" value={count(activeDevices || summary.active_devices)} />
+        <KpiCard label={t("filteredTransactions")} value={count(displayedTrips)} tone="green" />
+        <KpiCard label={t("filteredRevenue")} value={kwd(displayedRevenue)} tone="blue" />
+        <KpiCard label={t("averageFare")} value={kwd(avgFare)} tone="amber" />
+        <KpiCard label={t("peakRevenueDay")} value={peakDay.date ? day(peakDay.date) : "-"} tone="red" />
+        <KpiCard label={t("activeDevices")} value={count(activeDevices || summary.active_devices)} />
       </div>
 
       <div className="analytics-grid">
-        <Panel title="Revenue trend" meta="Daily KWD">
+        <Panel title={t("revenueTrend")} meta={t("dailyKwd")}>
           <BarChart rows={filteredDaily.slice(0, 12).reverse()} />
         </Panel>
-        <Panel title="Card mix" meta="Share by transactions">
+        <Panel title={t("cardMix")} meta={t("shareByTransactions")}>
           <DonutChart rows={cardTypes.slice(0, 5)} />
         </Panel>
-        <Panel title="Revenue split" meta="Top fare categories">
-          <PieChart rows={cardTypes.slice(0, 5)} />
+        <Panel title={t("revenueSplit")} meta={t("topFareCategories")}>
+          <PieChart rows={cardTypes.slice(0, 5)} revenueLabel={t("revenue")} />
         </Panel>
-        <Panel title="Fleet upload gauge" meta={`${count(activeDevices)} reporting devices`}>
+        <Panel title={t("fleetGauge")} meta={`${count(activeDevices)} ${t("reportingDevices")}`}>
           <Gauge value={devices.length ? Math.round((activeDevices / devices.length) * 100) : 0} />
         </Panel>
       </div>
 
       <div className="grid two">
-        <Panel title="Latest transactions" meta="Ordered by latest upload">
+        <Panel title={t("latestTransactionsPanel")} meta={t("orderedByUpload")}>
           <Table
             rows={transactions.slice(0, 8)}
             getKey={(row) => row.id}
             columns={[
-              { key: "transaction_datetime_kuwait", label: "Transaction Time", render: (row) => row.transaction_datetime_kuwait || "-" },
-              { key: "device_id", label: "Device" },
-              { key: "card_no", label: "Card" },
-              { key: "amount_display_kwd", label: "Amount", render: (row) => kwd(row.amount_display_kwd) }
+              { key: "transaction_datetime_kuwait", label: t("transactionTime"), render: (row) => row.transaction_datetime_kuwait || "-" },
+              { key: "device_id", label: t("device") },
+              { key: "card_no", label: t("card") },
+              { key: "amount_display_kwd", label: t("amount"), render: (row) => kwd(row.amount_display_kwd) }
             ]}
           />
         </Panel>
 
-        <Panel title="Revenue by day" meta="Filtered reporting range">
+        <Panel title={t("revenueByDay")} meta={t("filteredRange")}>
           <Table
             rows={filteredDaily.slice(0, 8)}
             getKey={(row) => row.date}
             columns={[
-              { key: "date", label: "Date", render: (row) => day(row.date) },
-              { key: "transaction_count", label: "Trips", render: (row) => count(row.transaction_count) },
-              { key: "revenue_kwd", label: "Revenue", render: (row) => kwd(row.revenue_kwd) }
+              { key: "date", label: t("date"), render: (row) => day(row.date) },
+              { key: "transaction_count", label: t("trips"), render: (row) => count(row.transaction_count) },
+              { key: "revenue_kwd", label: t("revenue"), render: (row) => kwd(row.revenue_kwd) }
             ]}
           />
         </Panel>
@@ -270,7 +262,7 @@ function DonutChart({ rows }) {
   );
 }
 
-function PieChart({ rows }) {
+function PieChart({ rows, revenueLabel }) {
   const total = Math.max(sum(rows, "revenue_kwd"), 1);
   let cumulative = 0;
   const gradient = rows
@@ -286,7 +278,7 @@ function PieChart({ rows }) {
     <div className="pie-layout">
       <div className="pie-chart" style={{ background: `conic-gradient(${gradient || "var(--line) 0 100%"})` }}>
         <strong>{kwd(total)}</strong>
-        <span>revenue</span>
+        <span>{revenueLabel}</span>
       </div>
       <div className="chart-legend">
         {rows.map((row, index) => (
