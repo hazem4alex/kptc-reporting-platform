@@ -10,13 +10,84 @@ import { Overview } from "./pages/Overview.jsx";
 import { Transactions } from "./pages/Transactions.jsx";
 import { Users } from "./pages/Users.jsx";
 
+function Icon({ name }) {
+  const props = {
+    fill: "none",
+    height: "22",
+    stroke: "currentColor",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeWidth: "1.6",
+    viewBox: "0 0 24 24",
+    width: "22"
+  };
+  if (name === "overview") {
+    return (
+      <svg {...props}>
+        <rect height="8" rx="1.2" width="8" x="3"  y="3" />
+        <rect height="5" rx="1.2" width="8" x="13" y="3" />
+        <rect height="8" rx="1.2" width="8" x="13" y="10" />
+        <rect height="5" rx="1.2" width="8" x="3"  y="13" />
+      </svg>
+    );
+  }
+  if (name === "transactions") {
+    return (
+      <svg {...props}>
+        <path d="M7 7h12l-3-3" />
+        <path d="M17 17H5l3 3" />
+      </svg>
+    );
+  }
+  if (name === "devices") {
+    return (
+      <svg {...props}>
+        <rect height="14" rx="2" width="14" x="5" y="3" />
+        <rect height="3" width="6" x="9" y="6" />
+        <circle cx="9"  cy="13" r="0.6" />
+        <circle cx="12" cy="13" r="0.6" />
+        <circle cx="15" cy="13" r="0.6" />
+        <path d="M9 21h6" />
+      </svg>
+    );
+  }
+  if (name === "card-types") {
+    return (
+      <svg {...props}>
+        <rect height="14" rx="2" width="18" x="3" y="5" />
+        <path d="M3 10h18" />
+        <path d="M7 15h3" />
+      </svg>
+    );
+  }
+  if (name === "live-map") {
+    return (
+      <svg {...props}>
+        <path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z" />
+        <circle cx="12" cy="9.5" r="2.5" />
+      </svg>
+    );
+  }
+  if (name === "users") {
+    return (
+      <svg {...props}>
+        <circle cx="9" cy="8" r="3.2" />
+        <path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+        <circle cx="17" cy="9" r="2.4" />
+        <path d="M15 19c0-2.6 1.8-4.6 4-4.6" />
+      </svg>
+    );
+  }
+  return null;
+}
+
 const nav = [
-  { id: "overview",     label: "overview",     icon: "◈" },
-  { id: "transactions", label: "transactions",  icon: "≋" },
-  { id: "devices",      label: "devices",       icon: "◉" },
-  { id: "card-types",   label: "cardTypes",     icon: "▣" },
-  { id: "live-map",     label: "liveMap",       icon: "⊕" },
-  { id: "users",        label: "users",         icon: "◯" }
+  { id: "overview",     label: "overview"     },
+  { id: "transactions", label: "transactions" },
+  { id: "devices",      label: "devices"      },
+  { id: "card-types",   label: "cardTypes"    },
+  { id: "live-map",     label: "liveMap"      },
+  { id: "users",        label: "users"        }
 ];
 
 function readStored(key, fallback) {
@@ -194,7 +265,9 @@ export default function App() {
               type="button"
               onClick={() => navigate(item.id)}
             >
-              <b aria-hidden="true">{item.icon}</b>
+              <b aria-hidden="true">
+                <Icon name={item.id} />
+              </b>
               <span>{t(item.label)}</span>
             </button>
           ))}
