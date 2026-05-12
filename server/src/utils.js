@@ -64,3 +64,28 @@ export function requiredString(value, name) {
 
   return value.trim();
 }
+
+export function getMoneyScale(amountRaw) {
+  const n = Number(amountRaw);
+  if (n === 25) return 100;
+  if (n === 250) return 1000;
+  return 1000;
+}
+
+export function applyMoneyScale(row) {
+  if (!row) return row;
+  const amountRaw = row.amount_raw == null ? null : Number(row.amount_raw);
+  const balanceRaw = row.balance_raw == null ? null : Number(row.balance_raw);
+  const scale = getMoneyScale(amountRaw);
+  const amount = amountRaw == null ? null : amountRaw / scale;
+  const balanceBefore = balanceRaw == null ? null : balanceRaw / scale;
+  const balanceAfter =
+    balanceRaw == null || amountRaw == null ? null : (balanceRaw - amountRaw) / scale;
+  return {
+    ...row,
+    money_scale: scale,
+    amount_corrected: amount,
+    balance_before_corrected: balanceBefore,
+    balance_after_corrected: balanceAfter
+  };
+}

@@ -190,7 +190,7 @@ export function Overview({ data, t }) {
                 { key: "transaction_datetime_kuwait", label: t("transactionTime"), render: (row) => row.transaction_datetime_kuwait || "-" },
                 { key: "device_id", label: t("device") },
                 { key: "card_no", label: t("card") },
-                { key: "amount_display_kwd", label: t("amount"), render: (row) => kwd(row.amount_display_kwd) }
+                { key: "amount_corrected", label: t("amount"), render: (row) => kwd(row.amount_corrected) }
               ]}
             />
           </Panel>

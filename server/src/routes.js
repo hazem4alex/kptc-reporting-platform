@@ -2,7 +2,7 @@ import express from "express";
 import { createToken, hashPassword, verifyPassword } from "./auth.js";
 import { pool } from "./db.js";
 import { requireApiKey, requireAuth } from "./middleware.js";
-import { parseDateTime, parseNumeric, parsePositiveInt, parseRawWithOffset, requiredString } from "./utils.js";
+import { applyMoneyScale, parseDateTime, parseNumeric, parsePositiveInt, parseRawWithOffset, requiredString } from "./utils.js";
 
 export const router = express.Router();
 
@@ -456,11 +456,13 @@ router.get("/api/reports/transactions", async (req, res, next) => {
 
     res.json({
       success: true,
-      data: rows.rows.map((row) => ({
-        ...row,
-        transaction_datetime_kuwait:
-          row.transaction_datetime_kuwait || parseRawWithOffset(row.transaction_datetime_raw, deviceTimeOffsetHours)
-      })),
+      data: rows.rows.map((row) =>
+        applyMoneyScale({
+          ...row,
+          transaction_datetime_kuwait:
+            row.transaction_datetime_kuwait || parseRawWithOffset(row.transaction_datetime_raw, deviceTimeOffsetHours)
+        })
+      ),
       pagination: {
         limit,
         offset,

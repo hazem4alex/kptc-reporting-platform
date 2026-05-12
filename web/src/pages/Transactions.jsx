@@ -189,8 +189,9 @@ export function Transactions({ rows = [], t }) {
                 { key: "record_uid", label: t("recordUid") },
                 { key: "card_no", label: t("card") },
                 { key: "card_type", label: t("type") },
-                { key: "amount_display_kwd", label: t("amount"), render: (row) => kwd(row.amount_display_kwd) },
-                { key: "balance_display_kwd", label: t("balance"), render: (row) => kwd(row.balance_display_kwd) }
+                { key: "amount_corrected", label: t("amount"), render: (row) => kwd(row.amount_corrected) },
+                { key: "balance_before_corrected", label: t("balanceBefore"), render: (row) => kwd(row.balance_before_corrected) },
+                { key: "balance_after_corrected", label: t("balanceAfter"), render: (row) => kwd(row.balance_after_corrected) }
               ]}
             />
           </section>
