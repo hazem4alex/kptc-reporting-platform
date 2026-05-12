@@ -57,17 +57,28 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
   try {
     const body = req.body || {};
     const deviceId = requiredString(body.device_id, "device_id");
+    const routeExtra = body.route_extra === undefined ? null : JSON.stringify(body.route_extra);
     const transactions = Array.isArray(body.transactions) ? body.transactions : [];
 
     await client.query("BEGIN");
 
     await client.query(
       `
-        INSERT INTO devices (device_id, last_seen_at)
-        VALUES ($1, now())
+        INSERT INTO devices (device_id, bus_no, route_no, route_name, route_extra, last_seen_at)
+        VALUES ($1, $2, $3, $4, $5::jsonb, now())
         ON CONFLICT (device_id) DO UPDATE SET last_seen_at = now()
+          , bus_no = COALESCE(EXCLUDED.bus_no, devices.bus_no)
+          , route_no = COALESCE(EXCLUDED.route_no, devices.route_no)
+          , route_name = COALESCE(EXCLUDED.route_name, devices.route_name)
+          , route_extra = COALESCE(EXCLUDED.route_extra, devices.route_extra)
       `,
-      [deviceId]
+      [
+        deviceId,
+        body.bus_no ?? null,
+        body.route_no ?? null,
+        body.route_name ?? null,
+        routeExtra
+      ]
     );
 
     let accepted = 0;
@@ -268,6 +279,8 @@ router.get("/api/reports/devices", async (req, res, next) => {
         d.device_id,
         d.bus_no,
         d.route_no,
+        d.route_name,
+        d.route_extra,
         d.last_seen_at,
         COUNT(t.id)::bigint AS total_transactions,
         COALESCE(SUM(t.amount_display_kwd), 0)::numeric(14,3) AS total_revenue_kwd,

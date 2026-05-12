@@ -1,6 +1,11 @@
 import { Table } from "../components/Table.jsx";
 import { count, dateTime, kwd } from "../format.js";
 
+function routeExtra(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  return typeof value === "object" ? JSON.stringify(value) : value;
+}
+
 export function Devices({ rows }) {
   return (
     <section className="page">
@@ -17,7 +22,9 @@ export function Devices({ rows }) {
           columns={[
             { key: "device_id", label: "Device" },
             { key: "bus_no", label: "Bus" },
-            { key: "route_no", label: "Route" },
+            { key: "route_no", label: "Route No." },
+            { key: "route_name", label: "Route Name", render: (row) => row.route_name || "-" },
+            { key: "route_extra", label: "Route Extra", render: (row) => routeExtra(row.route_extra) },
             { key: "last_seen_at", label: "Last seen", render: (row) => dateTime(row.last_seen_at) },
             { key: "total_transactions", label: "Transactions", render: (row) => count(row.total_transactions) },
             { key: "total_revenue_kwd", label: "Revenue", render: (row) => kwd(row.total_revenue_kwd) },

@@ -15,10 +15,17 @@ export async function initDb() {
       device_id text PRIMARY KEY,
       bus_no text NULL,
       route_no text NULL,
+      route_name text NULL,
+      route_extra jsonb NULL,
       description text NULL,
       created_at timestamptz DEFAULT now(),
       last_seen_at timestamptz NULL
     );
+
+    ALTER TABLE devices ADD COLUMN IF NOT EXISTS bus_no text NULL;
+    ALTER TABLE devices ADD COLUMN IF NOT EXISTS route_no text NULL;
+    ALTER TABLE devices ADD COLUMN IF NOT EXISTS route_name text NULL;
+    ALTER TABLE devices ADD COLUMN IF NOT EXISTS route_extra jsonb NULL;
 
     CREATE TABLE IF NOT EXISTS transactions (
       id bigserial PRIMARY KEY,
