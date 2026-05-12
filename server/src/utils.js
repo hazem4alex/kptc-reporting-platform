@@ -7,7 +7,7 @@ export function parseDateTime(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function parseRawGmtToKuwait(raw) {
+export function parseRawWithOffset(raw, offsetHours = -5) {
   const value = String(raw || "").trim();
   if (!/^\d{14}$/.test(value)) return null;
 
@@ -18,20 +18,22 @@ export function parseRawGmtToKuwait(raw) {
   const minute = Number(value.slice(10, 12));
   const second = Number(value.slice(12, 14));
 
-  const gmtDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  const neutralDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
   if (
-    Number.isNaN(gmtDate.getTime()) ||
-    gmtDate.getUTCFullYear() !== year ||
-    gmtDate.getUTCMonth() + 1 !== month ||
-    gmtDate.getUTCDate() !== day ||
-    gmtDate.getUTCHours() !== hour ||
-    gmtDate.getUTCMinutes() !== minute ||
-    gmtDate.getUTCSeconds() !== second
+    Number.isNaN(neutralDate.getTime()) ||
+    neutralDate.getUTCFullYear() !== year ||
+    neutralDate.getUTCMonth() + 1 !== month ||
+    neutralDate.getUTCDate() !== day ||
+    neutralDate.getUTCHours() !== hour ||
+    neutralDate.getUTCMinutes() !== minute ||
+    neutralDate.getUTCSeconds() !== second
   ) {
     return null;
   }
 
-  const date = new Date(gmtDate.getTime() + 3 * 60 * 60 * 1000);
+  const numericOffset = Number(offsetHours);
+  const safeOffset = Number.isFinite(numericOffset) ? numericOffset : -5;
+  const date = new Date(neutralDate.getTime() + safeOffset * 60 * 60 * 1000);
 
   const pad = (part) => String(part).padStart(2, "0");
   return [

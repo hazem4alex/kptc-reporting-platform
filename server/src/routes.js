@@ -1,11 +1,16 @@
 import express from "express";
 import { pool } from "./db.js";
 import { requireApiKey } from "./middleware.js";
-import { parseDateTime, parseNumeric, parsePositiveInt, parseRawGmtToKuwait, requiredString } from "./utils.js";
+import { parseDateTime, parseNumeric, parsePositiveInt, parseRawWithOffset, requiredString } from "./utils.js";
 
 export const router = express.Router();
 
-const rawGmtToKuwaitSql = `
+const configuredDeviceTimeOffset = Number(process.env.DEVICE_TIME_OFFSET_HOURS ?? -5);
+const deviceTimeOffsetHours = Number.isFinite(configuredDeviceTimeOffset)
+  ? configuredDeviceTimeOffset
+  : -5;
+
+const rawWithDeviceOffsetSql = `
   CASE
     WHEN transaction_datetime_raw ~ '^\\d{14}$' THEN
       make_timestamp(
@@ -15,7 +20,7 @@ const rawGmtToKuwaitSql = `
         substring(transaction_datetime_raw from 9 for 2)::int,
         substring(transaction_datetime_raw from 11 for 2)::int,
         substring(transaction_datetime_raw from 13 for 2)::int
-      ) + interval '3 hours'
+      ) + (${deviceTimeOffsetHours} * interval '1 hour')
     ELSE NULL
   END
 `;
@@ -201,7 +206,7 @@ router.get("/api/reports/summary", async (req, res, next) => {
         SELECT
           amount_display_kwd,
           transaction_datetime,
-          ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+          ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
         FROM transactions
       )
       SELECT
@@ -233,7 +238,7 @@ router.get("/api/reports/daily", async (req, res, next) => {
         WITH normalized AS (
           SELECT
             amount_display_kwd,
-            ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+            ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions
         )
         SELECT
@@ -293,7 +298,7 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
             amount_display_kwd, amount_copy_raw, transaction_datetime,
             transaction_datetime_raw, record_type, sub_type, crc, source_file, received_at,
-            ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+            ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions
         )
         SELECT
@@ -308,7 +313,7 @@ router.get("/api/reports/transactions", async (req, res, next) => {
           AND ($2::text IS NULL OR card_no = $2)
           AND ($3::date IS NULL OR transaction_datetime_kuwait_ts::date >= $3::date)
           AND ($4::date IS NULL OR transaction_datetime_kuwait_ts::date <= $4::date)
-        ORDER BY transaction_datetime_kuwait_ts DESC NULLS LAST, received_at DESC
+        ORDER BY id DESC
         LIMIT $5 OFFSET $6
       `,
       [deviceId || null, cardNo || null, from || null, to || null, limit, offset]
@@ -320,7 +325,7 @@ router.get("/api/reports/transactions", async (req, res, next) => {
           SELECT
             device_id,
             card_no,
-            ${rawGmtToKuwaitSql} AS transaction_datetime_kuwait_ts
+            ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions
         )
         SELECT COUNT(*)::bigint AS total
@@ -338,7 +343,7 @@ router.get("/api/reports/transactions", async (req, res, next) => {
       data: rows.rows.map((row) => ({
         ...row,
         transaction_datetime_kuwait:
-          row.transaction_datetime_kuwait || parseRawGmtToKuwait(row.transaction_datetime_raw)
+          row.transaction_datetime_kuwait || parseRawWithOffset(row.transaction_datetime_raw, deviceTimeOffsetHours)
       })),
       pagination: {
         limit,
