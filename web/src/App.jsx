@@ -161,6 +161,11 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <div className="sidebar-feature" aria-hidden="true">
+          <div />
+          <strong>Kuwait fleet operations</strong>
+          <span>Live fare uploads, device health, and route activity.</span>
+        </div>
       </aside>
 
       <main>
