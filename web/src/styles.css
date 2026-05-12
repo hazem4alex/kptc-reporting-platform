@@ -173,8 +173,10 @@ html {
 
 body {
   background:
+    linear-gradient(180deg, rgba(6, 12, 20, 0.92) 0%, rgba(6, 12, 20, 0.96) 60%, rgba(6, 12, 20, 0.99) 100%),
     radial-gradient(ellipse 55% 42% at 82% 0%,   rgba(0, 229, 200, 0.05)  0%, transparent 100%),
     radial-gradient(ellipse 44% 32% at 8%  92%,  rgba(255, 53, 85, 0.04)  0%, transparent 100%),
+    url("https://www.kptc.com.kw/images/bgtop.jpg") center top / cover no-repeat fixed,
     var(--base);
   font-family: 'DM Sans', sans-serif;
   margin: 0;
@@ -266,7 +268,7 @@ nav button {
   border: 1px solid transparent;
   border-left-width: 3px;
   border-radius: 8px;
-  color: var(--muted);
+  color: #8da9c0;
   display: flex;
   font-size: 12px;
   font-weight: 600;
@@ -279,7 +281,7 @@ nav button {
 }
 
 nav button b {
-  color: var(--muted);
+  color: #8da9c0;
   flex-shrink: 0;
   font-family: 'DM Sans', sans-serif;
   font-size: 18px;
@@ -288,26 +290,26 @@ nav button b {
 }
 
 nav button:hover {
-  background: var(--accent-subtle);
-  border-color: var(--line-hover);
-  border-left-color: var(--line-hover);
-  color: var(--ink);
+  background: rgba(0, 229, 200, 0.08);
+  border-color: rgba(0, 229, 200, 0.22);
+  border-left-color: rgba(0, 229, 200, 0.22);
+  color: #c2e4f5;
 }
 
 nav button:hover b {
-  color: var(--accent-dim);
+  color: rgba(0, 229, 200, 0.7);
 }
 
 nav button.active {
-  background: rgba(0, 229, 200, 0.13);
-  border-color: var(--line-active);
-  border-left-color: var(--accent);
-  color: var(--accent);
-  box-shadow: inset 0 0 24px rgba(0, 229, 200, 0.04);
+  background: rgba(0, 229, 200, 0.18);
+  border-color: rgba(0, 229, 200, 0.45);
+  border-left-color: #00e5c8;
+  color: #00e5c8;
+  box-shadow: inset 0 0 24px rgba(0, 229, 200, 0.06);
 }
 
 nav button.active b {
-  color: var(--accent);
+  color: #00e5c8;
   text-shadow: 0 0 14px rgba(0, 229, 200, 0.75);
 }
 
@@ -322,8 +324,8 @@ nav button.active b {
 
 /* 9. Sidebar feature ---------------------------------------- */
 .sidebar-feature {
-  border-top: 1px solid var(--line);
-  color: var(--muted);
+  border-top: 1px solid rgba(0, 229, 200, 0.12);
+  color: #6f8ca3;
   display: grid;
   font-family: 'DM Sans', sans-serif;
   font-size: 9px;
@@ -354,7 +356,7 @@ nav button.active b {
 }
 
 .sidebar-feature strong {
-  color: var(--ink-2);
+  color: #c2e4f5;
   font-size: 10px;
 }
 
@@ -1536,8 +1538,10 @@ td:nth-child(4) {
 /* Light mode component overrides ----------------------------- */
 :root[data-theme="light"] body {
   background:
+    linear-gradient(180deg, rgba(238, 244, 248, 0.88) 0%, rgba(238, 244, 248, 0.96) 70%, rgba(238, 244, 248, 1) 100%),
     radial-gradient(ellipse 55% 42% at 82% 0%, rgba(0, 110, 96, 0.06) 0%, transparent 100%),
     radial-gradient(ellipse 44% 32% at 8%  92%, rgba(192, 28, 50, 0.04) 0%, transparent 100%),
+    url("https://www.kptc.com.kw/images/bgtop.jpg") center top / cover no-repeat fixed,
     #eef4f8;
 }
 
