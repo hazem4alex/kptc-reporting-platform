@@ -50,12 +50,14 @@ export default function App() {
     return token && user ? { token, user: JSON.parse(user) } : null;
   });
   const [collapsed, setCollapsed] = useState(() => readStored("kptc_sidebar", "open") === "collapsed");
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState(() => readStored("kptc_theme", "dark"));
   const [language, setLanguage] = useState(() => readStored("kptc_language", "en"));
   const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.bsTheme = theme;
     document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
     document.documentElement.lang = language;
     localStorage.setItem("kptc_theme", theme);
@@ -150,9 +152,18 @@ export default function App() {
     return <Login error={loginError} onLogin={handleLogin} t={t} />;
   }
 
+  function navigate(id) {
+    setActive(id);
+    setMobileOpen(false);
+  }
+
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
-      <aside className="sidebar">
+      {mobileOpen && (
+        <div className="mobile-backdrop" onClick={() => setMobileOpen(false)} />
+      )}
+
+      <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="sidebar-header">
           <div className="brand">
             <img alt="KPTC logo" src="https://www.kptc.com.kw/img/logo.png" />
@@ -173,7 +184,7 @@ export default function App() {
               key={item.id}
               title={t(item.label)}
               type="button"
-              onClick={() => setActive(item.id)}
+              onClick={() => navigate(item.id)}
             >
               <b aria-hidden="true">{item.icon}</b>
               <span>{t(item.label)}</span>
@@ -189,6 +200,14 @@ export default function App() {
 
       <main>
         <header className="topbar">
+          <button
+            className="burger-btn"
+            type="button"
+            aria-label="Open menu"
+            onClick={() => setMobileOpen((v) => !v)}
+          >
+            <span /><span /><span />
+          </button>
           <div className="topbar-controls">
             <LiveClock />
             <span className="live-badge">Live</span>

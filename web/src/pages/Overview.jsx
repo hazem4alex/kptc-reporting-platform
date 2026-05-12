@@ -139,54 +139,75 @@ export function Overview({ data, t }) {
         </label>
       </section>
 
-      <div className="kpi-grid">
-        <KpiCard label={t("filteredTransactions")} value={count(displayedTrips)} tone="green" />
-        <KpiCard label={t("filteredRevenue")} value={kwd(displayedRevenue)} tone="blue" />
-        <KpiCard label={t("averageFare")} value={kwd(avgFare)} tone="amber" />
-        <KpiCard label={t("peakRevenueDay")} value={peakDay.date ? day(peakDay.date) : "-"} tone="red" />
-        <KpiCard label={t("activeDevices")} value={count(activeDevices || summary.active_devices)} />
+      <div className="row g-3">
+        <div className="col-6 col-md-4 col-xl">
+          <KpiCard label={t("filteredTransactions")} value={count(displayedTrips)} tone="green" />
+        </div>
+        <div className="col-6 col-md-4 col-xl">
+          <KpiCard label={t("filteredRevenue")} value={kwd(displayedRevenue)} tone="blue" />
+        </div>
+        <div className="col-6 col-md-4 col-xl">
+          <KpiCard label={t("averageFare")} value={kwd(avgFare)} tone="amber" />
+        </div>
+        <div className="col-6 col-md-4 col-xl">
+          <KpiCard label={t("peakRevenueDay")} value={peakDay.date ? day(peakDay.date) : "-"} tone="red" />
+        </div>
+        <div className="col-12 col-md-4 col-xl">
+          <KpiCard label={t("activeDevices")} value={count(activeDevices || summary.active_devices)} />
+        </div>
       </div>
 
-      <div className="analytics-grid">
-        <Panel title={t("revenueTrend")} meta={t("dailyKwd")}>
-          <BarChart rows={filteredDaily.slice(0, 12).reverse()} />
-        </Panel>
-        <Panel title={t("cardMix")} meta={t("shareByTransactions")}>
-          <DonutChart rows={cardTypes.slice(0, 5)} />
-        </Panel>
-        <Panel title={t("revenueSplit")} meta={t("topFareCategories")}>
-          <PieChart rows={cardTypes.slice(0, 5)} revenueLabel={t("revenue")} />
-        </Panel>
-        <Panel title={t("fleetGauge")} meta={`${count(activeDevices)} ${t("reportingDevices")}`}>
-          <Gauge value={devices.length ? Math.round((activeDevices / devices.length) * 100) : 0} />
-        </Panel>
+      <div className="row g-3">
+        <div className="col-12 col-md-6 col-xxl-3">
+          <Panel title={t("revenueTrend")} meta={t("dailyKwd")}>
+            <BarChart rows={filteredDaily.slice(0, 12).reverse()} />
+          </Panel>
+        </div>
+        <div className="col-12 col-md-6 col-xxl-3">
+          <Panel title={t("cardMix")} meta={t("shareByTransactions")}>
+            <DonutChart rows={cardTypes.slice(0, 5)} />
+          </Panel>
+        </div>
+        <div className="col-12 col-md-6 col-xxl-3">
+          <Panel title={t("revenueSplit")} meta={t("topFareCategories")}>
+            <PieChart rows={cardTypes.slice(0, 5)} revenueLabel={t("revenue")} />
+          </Panel>
+        </div>
+        <div className="col-12 col-md-6 col-xxl-3">
+          <Panel title={t("fleetGauge")} meta={`${count(activeDevices)} ${t("reportingDevices")}`}>
+            <Gauge value={devices.length ? Math.round((activeDevices / devices.length) * 100) : 0} />
+          </Panel>
+        </div>
       </div>
 
-      <div className="grid two">
-        <Panel title={t("latestTransactionsPanel")} meta={t("orderedByUpload")}>
-          <Table
-            rows={transactions.slice(0, 8)}
-            getKey={(row) => row.id}
-            columns={[
-              { key: "transaction_datetime_kuwait", label: t("transactionTime"), render: (row) => row.transaction_datetime_kuwait || "-" },
-              { key: "device_id", label: t("device") },
-              { key: "card_no", label: t("card") },
-              { key: "amount_display_kwd", label: t("amount"), render: (row) => kwd(row.amount_display_kwd) }
-            ]}
-          />
-        </Panel>
-
-        <Panel title={t("revenueByDay")} meta={t("filteredRange")}>
-          <Table
-            rows={filteredDaily.slice(0, 8)}
-            getKey={(row) => row.date}
-            columns={[
-              { key: "date", label: t("date"), render: (row) => day(row.date) },
-              { key: "transaction_count", label: t("trips"), render: (row) => count(row.transaction_count) },
-              { key: "revenue_kwd", label: t("revenue"), render: (row) => kwd(row.revenue_kwd) }
-            ]}
-          />
-        </Panel>
+      <div className="row g-3">
+        <div className="col-12 col-lg-6">
+          <Panel title={t("latestTransactionsPanel")} meta={t("orderedByUpload")}>
+            <Table
+              rows={transactions.slice(0, 8)}
+              getKey={(row) => row.id}
+              columns={[
+                { key: "transaction_datetime_kuwait", label: t("transactionTime"), render: (row) => row.transaction_datetime_kuwait || "-" },
+                { key: "device_id", label: t("device") },
+                { key: "card_no", label: t("card") },
+                { key: "amount_display_kwd", label: t("amount"), render: (row) => kwd(row.amount_display_kwd) }
+              ]}
+            />
+          </Panel>
+        </div>
+        <div className="col-12 col-lg-6">
+          <Panel title={t("revenueByDay")} meta={t("filteredRange")}>
+            <Table
+              rows={filteredDaily.slice(0, 8)}
+              getKey={(row) => row.date}
+              columns={[
+                { key: "date", label: t("date"), render: (row) => day(row.date) },
+                { key: "transaction_count", label: t("trips"), render: (row) => count(row.transaction_count) },
+                { key: "revenue_kwd", label: t("revenue"), render: (row) => kwd(row.revenue_kwd) }
+              ]}
+            />
+          </Panel>
+        </div>
       </div>
     </section>
   );

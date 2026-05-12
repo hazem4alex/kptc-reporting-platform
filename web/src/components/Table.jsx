@@ -7,7 +7,7 @@ export function Table({ columns, rows, getKey }) {
 
   return (
     <div className="table-wrap">
-      <table>
+      <table className="table table-hover">
         <thead>
           <tr>
             {columns.map((column) => (

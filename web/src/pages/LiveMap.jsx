@@ -11,37 +11,41 @@ export function LiveMap({ rows, t }) {
         </div>
       </div>
 
-      <section className="map-shell">
-        <div className="map-placeholder">
-          <div className="map-grid" />
-          <div className="map-label">{t("mapPlaceholder")}</div>
+      <div className="row g-3">
+        <div className="col-12 col-lg-8">
+          <div className="map-placeholder">
+            <div className="map-grid" />
+            <div className="map-label">{t("mapPlaceholder")}</div>
+          </div>
         </div>
-        <div className="location-list">
-          {!rows?.length ? (
-            <EmptyState>{t("locationUnavailable")}</EmptyState>
-          ) : (
-            rows.map((row) => (
-              <article className="location-row" key={row.device_id}>
-                <div>
-                  <strong>{row.bus_no || row.device_id}</strong>
-                  <span>{row.route_no ? `${t("route")} ${row.route_no}` : row.device_id}</span>
-                </div>
-                {row.lat && row.lng ? (
-                  <p>
-                    {row.lat}, {row.lng}
-                    <small>{t("updated")} {dateTime(row.location_time || row.received_at)}</small>
-                  </p>
-                ) : (
-                  <p>
-                    {t("locationUnavailable")}
-                    <small>{t("updated")} {dateTime(row.received_at)}</small>
-                  </p>
-                )}
-              </article>
-            ))
-          )}
+        <div className="col-12 col-lg-4">
+          <div className="location-list">
+            {!rows?.length ? (
+              <EmptyState>{t("locationUnavailable")}</EmptyState>
+            ) : (
+              rows.map((row) => (
+                <article className="location-row" key={row.device_id}>
+                  <div>
+                    <strong>{row.bus_no || row.device_id}</strong>
+                    <span>{row.route_no ? `${t("route")} ${row.route_no}` : row.device_id}</span>
+                  </div>
+                  {row.lat && row.lng ? (
+                    <p>
+                      {row.lat}, {row.lng}
+                      <small>{t("updated")} {dateTime(row.location_time || row.received_at)}</small>
+                    </p>
+                  ) : (
+                    <p>
+                      {t("locationUnavailable")}
+                      <small>{t("updated")} {dateTime(row.received_at)}</small>
+                    </p>
+                  )}
+                </article>
+              ))
+            )}
+          </div>
         </div>
-      </section>
+      </div>
     </section>
   );
 }

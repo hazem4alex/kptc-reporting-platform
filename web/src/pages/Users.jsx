@@ -31,7 +31,8 @@ export function Users({ rows = [], onCreateUser, t }) {
         </div>
       </div>
 
-      <section className="user-layout">
+      <div className="row g-3">
+        <div className="col-12 col-md-4 col-xl-3">
         <form className="panel user-form" onSubmit={submit}>
           <div className="panel-heading">
             <h2>{t("createUser")}</h2>
@@ -58,7 +59,9 @@ export function Users({ rows = [], onCreateUser, t }) {
           {error ? <p className="form-error">{error}</p> : null}
           <button className="primary-action" type="submit">{t("createUser")}</button>
         </form>
+        </div>
 
+        <div className="col-12 col-md-8 col-xl-9">
         <section className="panel">
           <div className="panel-heading">
             <h2>{t("users")}</h2>
@@ -75,7 +78,8 @@ export function Users({ rows = [], onCreateUser, t }) {
             ]}
           />
         </section>
-      </section>
+        </div>
+      </div>
     </section>
   );
 }
