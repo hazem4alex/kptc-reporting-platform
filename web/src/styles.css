@@ -1,26 +1,45 @@
 :root {
-  --ink: #17212b;
-  --ink-2: #253545;
-  --muted: #697889;
-  --line: #d8e0e7;
-  --paper: #fffdf8;
-  --panel: rgba(255, 255, 255, 0.88);
-  --field: #f6f8f7;
-  --brand-red: #b3232d;
-  --brand-red-dark: #8f1c25;
-  --brand-gold: #c99b4a;
-  --brand-blue: #1f5f80;
-  --brand-green: #1f7a5a;
-  --segment-1: #b3232d;
-  --segment-2: #1f5f80;
-  --segment-3: #c99b4a;
-  --segment-4: #1f7a5a;
-  --segment-5: #64748b;
+  --ink: #18202c;
+  --ink-2: #344052;
+  --muted: #7a8797;
+  --line: #dce3ea;
+  --paper: #f4f6f8;
+  --panel: rgba(255, 255, 255, 0.9);
+  --field: #f8fafc;
+  --sidebar: #18202c;
+  --sidebar-soft: #242e3d;
+  --brand-red: #c92b3a;
+  --brand-red-dark: #9f2230;
+  --brand-gold: #d5a94f;
+  --brand-blue: #346f92;
+  --brand-green: #2d8a67;
+  --segment-1: #c92b3a;
+  --segment-2: #346f92;
+  --segment-3: #d5a94f;
+  --segment-4: #2d8a67;
+  --segment-5: #748194;
   color: var(--ink);
-  background: #f2f0e9;
-  font-family: Outfit, Satoshi, "Avenir Next", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--paper);
+  font-family: "Manrope", "Avenir Next", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="dark"] {
+  --ink: #edf3f8;
+  --ink-2: #c9d4df;
+  --muted: #8fa0b2;
+  --line: #313d4c;
+  --paper: #101722;
+  --panel: rgba(24, 32, 44, 0.9);
+  --field: #172130;
+  --sidebar: #0e1520;
+  --sidebar-soft: #172130;
+  --brand-red: #e05260;
+  --brand-red-dark: #bf3343;
+  --brand-gold: #e0ba66;
+  --brand-blue: #5d9fc0;
+  --brand-green: #55b58e;
 }
 
 * {
@@ -33,9 +52,9 @@ html {
 
 body {
   background:
-    radial-gradient(circle at 8% 8%, rgba(179, 35, 45, 0.11), transparent 26rem),
-    radial-gradient(circle at 95% 0%, rgba(31, 95, 128, 0.12), transparent 28rem),
-    linear-gradient(135deg, #f6f3eb 0%, #e9eef1 100%);
+    radial-gradient(circle at 8% 8%, rgba(201, 43, 58, 0.1), transparent 26rem),
+    radial-gradient(circle at 95% 0%, rgba(52, 111, 146, 0.15), transparent 28rem),
+    linear-gradient(135deg, var(--paper) 0%, var(--paper) 100%);
   margin: 0;
   min-width: 320px;
 }
@@ -73,11 +92,16 @@ select:focus-visible {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   min-height: 100dvh;
+  transition: grid-template-columns 220ms ease;
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 92px minmax(0, 1fr);
 }
 
 .sidebar {
   background:
-    linear-gradient(rgba(23, 33, 43, 0.88), rgba(23, 33, 43, 0.94)),
+    linear-gradient(rgba(24, 32, 44, 0.92), rgba(24, 32, 44, 0.96)),
     url("https://www.kptc.com.kw/img/logo.png");
   background-position: center 88%, center;
   background-repeat: no-repeat;
@@ -90,6 +114,12 @@ select:focus-visible {
   padding: 26px 18px;
   position: sticky;
   top: 0;
+}
+
+:root[data-theme="dark"] .sidebar {
+  background:
+    linear-gradient(rgba(14, 21, 32, 0.94), rgba(14, 21, 32, 0.98)),
+    url("https://www.kptc.com.kw/img/logo.png");
 }
 
 .brand {
@@ -125,6 +155,26 @@ select:focus-visible {
   font-weight: 600;
 }
 
+nav button b {
+  display: none;
+}
+
+.sidebar-collapsed .brand {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.sidebar-collapsed .brand div,
+.sidebar-collapsed nav button span {
+  display: none;
+}
+
+.sidebar-collapsed nav button b {
+  display: block;
+  font-size: 15px;
+  text-align: center;
+}
+
 nav {
   align-content: start;
   display: grid;
@@ -142,6 +192,11 @@ nav button {
   transition: background-color 180ms ease, color 180ms ease, transform 180ms ease, border-color 180ms ease;
 }
 
+.sidebar-collapsed nav button {
+  min-width: 0;
+  padding: 12px;
+}
+
 nav button:hover,
 nav button.active {
   background: rgba(255, 253, 248, 0.1);
@@ -157,6 +212,116 @@ main {
   min-width: 0;
   padding: 28px;
   position: relative;
+}
+
+.topbar {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin: 0 auto 22px;
+  max-width: 1480px;
+}
+
+.topbar-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.topbar select {
+  min-width: 132px;
+  width: auto;
+}
+
+.icon-action,
+.primary-action {
+  background: var(--ink);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--paper);
+  min-height: 42px;
+  padding: 10px 14px;
+  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.icon-action {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.icon-action:active,
+.primary-action:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.user-chip {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 13px;
+}
+
+.login-shell {
+  align-items: center;
+  display: grid;
+  min-height: 100dvh;
+  padding: 24px;
+}
+
+.login-panel {
+  background:
+    linear-gradient(135deg, var(--panel), rgba(255, 255, 255, 0.68)),
+    radial-gradient(circle at 100% 0, rgba(201, 43, 58, 0.15), transparent 18rem);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px -42px rgba(24, 32, 44, 0.9);
+  display: grid;
+  gap: 28px;
+  margin: 0 auto;
+  max-width: 460px;
+  padding: 28px;
+  width: 100%;
+}
+
+:root[data-theme="dark"] .login-panel {
+  background:
+    linear-gradient(135deg, rgba(24, 32, 44, 0.96), rgba(24, 32, 44, 0.78)),
+    radial-gradient(circle at 100% 0, rgba(224, 82, 96, 0.16), transparent 18rem);
+}
+
+.login-brand {
+  align-items: center;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 74px 1fr;
+}
+
+.login-brand img {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 9px;
+  width: 74px;
+}
+
+.login-form,
+.user-form {
+  display: grid;
+  gap: 14px;
+}
+
+.form-error {
+  background: rgba(201, 43, 58, 0.1);
+  border: 1px solid rgba(201, 43, 58, 0.24);
+  border-radius: 8px;
+  color: var(--brand-red-dark);
+  padding: 10px 12px;
 }
 
 .page {
@@ -728,6 +893,58 @@ td:nth-child(4) {
   font-size: 12px;
 }
 
+.user-layout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+}
+
+:root[data-theme="dark"] body::before {
+  background-image:
+    linear-gradient(rgba(237, 243, 248, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(237, 243, 248, 0.035) 1px, transparent 1px);
+}
+
+:root[data-theme="dark"] .hero-dashboard {
+  background:
+    linear-gradient(105deg, rgba(24, 32, 44, 0.96) 0%, rgba(24, 32, 44, 0.84) 58%, rgba(224, 82, 96, 0.13) 100%),
+    radial-gradient(circle at 85% 18%, rgba(224, 186, 102, 0.18), transparent 17rem);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .filter-bar,
+:root[data-theme="dark"] .filter-panel,
+:root[data-theme="dark"] .last-sync,
+:root[data-theme="dark"] .transaction-summary,
+:root[data-theme="dark"] .state,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .kpi,
+:root[data-theme="dark"] .map-shell,
+:root[data-theme="dark"] .user-chip,
+:root[data-theme="dark"] .icon-action {
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .segmented-control,
+:root[data-theme="dark"] .bar-track {
+  background: #202b3a;
+  border-color: #313d4c;
+}
+
+:root[data-theme="dark"] .pie-chart::after {
+  background: var(--panel);
+}
+
+:root[dir="rtl"] nav button,
+:root[dir="rtl"] th,
+:root[dir="rtl"] td {
+  text-align: right;
+}
+
+:root[dir="rtl"] .kpi::before {
+  inset: 0 0 0 auto;
+}
+
 @media (max-width: 1280px) {
   .analytics-grid {
     grid-template-columns: 1fr 1fr;
@@ -747,10 +964,25 @@ td:nth-child(4) {
     grid-template-columns: 1fr;
   }
 
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
+    display: block;
     min-height: auto;
     padding: 16px;
     position: relative;
+  }
+
+  .sidebar-collapsed .brand div,
+  .sidebar-collapsed nav button span {
+    display: block;
+  }
+
+  .sidebar-collapsed .brand {
+    grid-template-columns: 58px 1fr;
+    justify-items: start;
   }
 
   .brand {
@@ -767,7 +999,8 @@ td:nth-child(4) {
 
   .kpi-grid,
   .grid.two,
-  .map-shell {
+  .map-shell,
+  .user-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -778,9 +1011,14 @@ td:nth-child(4) {
   }
 
   .page-header,
-  .hero-dashboard {
+  .hero-dashboard,
+  .topbar {
     align-items: start;
     display: grid;
+  }
+
+  .topbar-controls {
+    justify-content: start;
   }
 
   .hero-dashboard::after {

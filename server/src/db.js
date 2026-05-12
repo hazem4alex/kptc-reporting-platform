@@ -1,4 +1,5 @@
 import pg from "pg";
+import { hashPassword } from "./auth.js";
 
 const { Pool } = pg;
 
@@ -79,6 +80,23 @@ export async function initDb() {
       payload jsonb
     );
 
+    CREATE TABLE IF NOT EXISTS app_users (
+      id bigserial PRIMARY KEY,
+      username text UNIQUE NOT NULL,
+      password_hash text NOT NULL,
+      role text NOT NULL DEFAULT 'viewer',
+      display_name text NULL,
+      created_at timestamptz DEFAULT now(),
+      last_login_at timestamptz NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token text PRIMARY KEY,
+      user_id bigint NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+      created_at timestamptz DEFAULT now(),
+      expires_at timestamptz NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_transactions_device_id ON transactions(device_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_transaction_datetime ON transactions(transaction_datetime DESC);
     CREATE INDEX IF NOT EXISTS idx_transactions_card_no ON transactions(card_no);
@@ -86,5 +104,22 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_transactions_received_at ON transactions(received_at DESC);
     CREATE INDEX IF NOT EXISTS idx_bus_locations_device_time ON bus_locations(device_id, location_time DESC, received_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sync_batches_device_created ON sync_batches(device_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
   `);
+
+  await seedAdminUser();
+}
+
+async function seedAdminUser() {
+  const existing = await pool.query("SELECT id FROM app_users WHERE username = $1", ["admin"]);
+  if (existing.rowCount > 0) return;
+
+  await pool.query(
+    `
+      INSERT INTO app_users (username, password_hash, role, display_name)
+      VALUES ($1, $2, $3, $4)
+    `,
+    ["admin", hashPassword("Admin@123"), "admin", "System Administrator"]
+  );
 }

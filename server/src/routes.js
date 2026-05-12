@@ -1,6 +1,7 @@
 import express from "express";
+import { createToken, hashPassword, verifyPassword } from "./auth.js";
 import { pool } from "./db.js";
-import { requireApiKey } from "./middleware.js";
+import { requireApiKey, requireAuth } from "./middleware.js";
 import { parseDateTime, parseNumeric, parsePositiveInt, parseRawWithOffset, requiredString } from "./utils.js";
 
 export const router = express.Router();
@@ -47,6 +48,108 @@ router.get("/health", async (req, res, next) => {
     await pool.query("SELECT 1");
     res.json({ success: true, status: "ok" });
   } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/auth/login", async (req, res, next) => {
+  try {
+    const username = requiredString(req.body?.username, "username");
+    const password = requiredString(req.body?.password, "password");
+
+    const user = await pool.query(
+      `
+        SELECT id, username, password_hash, role, display_name
+        FROM app_users
+        WHERE lower(username) = lower($1)
+      `,
+      [username]
+    );
+
+    if (user.rowCount === 0 || !verifyPassword(password, user.rows[0].password_hash)) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid username or password"
+      });
+    }
+
+    const token = createToken();
+    await pool.query("DELETE FROM auth_sessions WHERE expires_at <= now()");
+    await pool.query(
+      `
+        INSERT INTO auth_sessions (token, user_id, expires_at)
+        VALUES ($1, $2, now() + interval '7 days')
+      `,
+      [token, user.rows[0].id]
+    );
+    await pool.query("UPDATE app_users SET last_login_at = now() WHERE id = $1", [user.rows[0].id]);
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.rows[0].id,
+        username: user.rows[0].username,
+        role: user.rows[0].role,
+        display_name: user.rows[0].display_name
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/auth/logout", requireAuth, async (req, res, next) => {
+  try {
+    const token = req.get("authorization").slice(7).trim();
+    await pool.query("DELETE FROM auth_sessions WHERE token = $1", [token]);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/api/auth/me", requireAuth, async (req, res) => {
+  res.json({ success: true, user: req.user });
+});
+
+router.get("/api/users", requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, username, role, display_name, created_at, last_login_at
+      FROM app_users
+      ORDER BY created_at ASC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/users", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ success: false, error: "Admin role is required" });
+    }
+
+    const username = requiredString(req.body?.username, "username");
+    const password = requiredString(req.body?.password, "password");
+    const role = req.body?.role === "admin" ? "admin" : "viewer";
+    const displayName = req.body?.display_name ?? null;
+
+    const result = await pool.query(
+      `
+        INSERT INTO app_users (username, password_hash, role, display_name)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, username, role, display_name, created_at, last_login_at
+      `,
+      [username, hashPassword(password), role, displayName]
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
     next(err);
   }
 });

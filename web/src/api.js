@@ -1,7 +1,17 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
-async function request(path) {
-  const response = await fetch(`${API_BASE_URL}${path}`);
+async function request(path, options = {}) {
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+    ...(options.headers || {})
+  };
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok || body.success === false) {
@@ -12,6 +22,11 @@ async function request(path) {
 }
 
 export const api = {
+  login: (credentials) => request("/api/auth/login", { method: "POST", body: credentials }),
+  logout: (token) => request("/api/auth/logout", { method: "POST", token }),
+  me: (token) => request("/api/auth/me", { token }),
+  users: (token) => request("/api/users", { token }),
+  createUser: (token, user) => request("/api/users", { method: "POST", token, body: user }),
   summary: () => request("/api/reports/summary"),
   daily: () => request("/api/reports/daily"),
   devices: () => request("/api/reports/devices"),
