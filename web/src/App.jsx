@@ -71,8 +71,11 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <strong>KPTC</strong>
-          <span>Reporting Platform</span>
+          <img alt="KPTC logo" src="https://www.kptc.com.kw/img/logo.png" />
+          <div>
+            <strong>KPTC</strong>
+            <span>Reporting Platform</span>
+          </div>
         </div>
         <nav>
           {nav.map((item) => (
