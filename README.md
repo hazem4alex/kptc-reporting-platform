@@ -32,6 +32,7 @@ Update `server/.env` if your local PostgreSQL URL differs:
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/kptc_reporting
 API_KEY=change-me
 PORT=4000
+DEVICE_TIME_OFFSET_HOURS=-5
 ```
 
 The server creates these tables automatically on startup if they do not exist:
@@ -40,6 +41,8 @@ The server creates these tables automatically on startup if they do not exist:
 - `transactions`
 - `bus_locations`
 - `sync_batches`
+- `app_users`
+- `auth_sessions`
 
 ### 2. Server
 
@@ -73,9 +76,22 @@ npm run dev
 
 Open the Vite URL shown in the terminal, usually `http://localhost:5173`.
 
+Default dashboard login after the API starts:
+
+- Username: `admin`
+- Password: `Admin@123`
+
 ## API
 
-Write endpoints require `x-api-key`. Reporting endpoints are read-only and do not require the key.
+Write endpoints require `x-api-key`. Dashboard auth endpoints use bearer session tokens. Reporting endpoints are read-only and currently do not require the key.
+
+### Dashboard Login
+
+```bash
+curl -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin@123"}'
+```
 
 ### Bulk Transaction Upload
 
@@ -85,6 +101,12 @@ curl -X POST http://localhost:4000/api/transactions/bulk \
   -H "x-api-key: change-me" \
   -d '{
     "device_id": "E60_TEST_001",
+    "bus_no": "BUS-101",
+    "route_no": "15",
+    "route_name": "Kuwait City - Salmiya",
+    "route_extra": {
+      "direction": "outbound"
+    },
     "source_file": "/data/e60apay_en/0/log/log_0000000000",
     "record_size": 2048,
     "file_size": 157696,
@@ -129,6 +151,8 @@ Response:
 
 The deduplication key is `record_uid`. The server uses `ON CONFLICT(record_uid) DO NOTHING`, so repeated uploads are safe.
 
+Root-level `bus_no`, `route_no`, `route_name`, and `route_extra` are upserted into `devices` on every bulk upload.
+
 ### Bus Location Upload
 
 ```bash
@@ -167,6 +191,36 @@ curl http://localhost:4000/api/reports/bus-locations/latest
 - The API never asks the device to delete original log files.
 - The device should update its local upload state only after HTTP `200` or `201`.
 - Duplicate uploads return success with `duplicates` counted, so retry logic can be simple.
+- E60 `transaction_datetime_raw` is not treated as browser-local time.
+- Reports use `DEVICE_TIME_OFFSET_HOURS`, default `-5`, through `parseRawWithOffset(raw, offsetHours)`.
+- The corrected display/reporting field is `transaction_datetime_kuwait`.
+- Daily reports group by the corrected display date.
+- Latest transactions are ordered by `id DESC`, not by transaction time.
+- Dashboard login is database-backed. `initDb()` seeds `admin / Admin@123` if missing.
+
+## Current Production Services
+
+GitHub repository:
+
+- `https://github.com/hazem4alex/kptc-reporting-platform`
+
+Railway project:
+
+- Project name: `KPTC`
+- API service: `kptc-api`
+- Web service: `kptc-web`
+- Database service: `Postgres`
+- API URL: `https://kptc-reporting-platform-production.up.railway.app`
+- Web URL: `https://kptc-web-production.up.railway.app`
+
+Railway deployment notes:
+
+- API service uses the repository root with root `railway.json`.
+- Web service root directory is `web`.
+- API should use `DATABASE_URL=${{Postgres.DATABASE_URL}}` for internal Railway database traffic.
+- Web should use `VITE_API_BASE_URL=https://kptc-reporting-platform-production.up.railway.app`.
+- Set `DEVICE_TIME_OFFSET_HOURS=-5` only if you want to be explicit; the API defaults to `-5`.
+- Keep `API_KEY` private. Device write endpoints require it.
 
 ## GitHub and Railway API Deployment
 
@@ -236,3 +290,98 @@ Vite reads `VITE_API_BASE_URL` during the build, so redeploy the web service aft
 - Configure Railway database backups.
 - Monitor `/health` from Railway or an external uptime service.
 - Keep original E60 log files on the device until your native tool confirms a successful upload response.
+
+## Agent Handoff Notes
+
+Use this section when another coding agent continues the project.
+
+### Repo Context
+
+- Local path used during development: `/Users/Hazem/Desktop/kptc-reporting-platform`
+- Branch: `main`
+- Stack:
+  - API: Express, PostgreSQL, plain `pg`, no ORM
+  - Web: Vite, React, plain CSS
+  - Deployment: Railway
+- Do not commit `.env` files.
+- Avoid changing transaction ingestion contracts unless explicitly requested by the device-side tool owner.
+
+### Important Files
+
+- API entrypoint: `server/src/index.js`
+- Database schema/init: `server/src/db.js`
+- API routes: `server/src/routes.js`
+- Auth helpers: `server/src/auth.js`
+- Auth/API key middleware: `server/src/middleware.js`
+- Time/raw parsing helpers: `server/src/utils.js`
+- Web API client: `web/src/api.js`
+- Main app shell: `web/src/App.jsx`
+- Overview dashboard: `web/src/pages/Overview.jsx`
+- Transactions grid: `web/src/pages/Transactions.jsx`
+- Users page: `web/src/pages/Users.jsx`
+- Translations: `web/src/i18n.js`
+- Global styling/design system: `web/src/styles.css`
+
+### Local Commands
+
+```bash
+# API
+cd server
+npm install
+npm start
+
+# Web
+cd web
+npm install
+npm run dev
+
+# Production web build check
+npm --prefix web run build
+
+# Syntax checks
+node --check server/src/routes.js
+node --check server/src/db.js
+node --check server/src/middleware.js
+node --check server/src/auth.js
+```
+
+### Current Features
+
+- Device bulk transaction ingestion with dedupe by `record_uid`.
+- Device config sync from bulk payload: `bus_no`, `route_no`, `route_name`, `route_extra`.
+- Corrected E60 display time via `DEVICE_TIME_OFFSET_HOURS`.
+- Dashboard auth with seeded admin user.
+- Users page for adding users.
+- Overview analytics with KPI cards, bar chart, donut chart, pie chart, gauge, and date filters.
+- Transactions page with search, filters, sorting, and grouping.
+- Devices, card types, and live map pages.
+- Collapsible sidebar, English/Arabic selection, and light/dark mode.
+
+### Design Direction
+
+The UI has been pushed toward a premium transport command-center style:
+
+- Dark ink sidebar.
+- Pale command canvas in light mode.
+- High-contrast dark mode.
+- KPTC red as the primary accent.
+- Soft glass/double-bezel panels.
+- Large, heavy dashboard typography.
+
+Skills previously used for the design pass:
+
+- `gpt-taste`
+- `redesign-existing-projects`
+- `high-end-visual-design`
+- `image-to-code`
+
+If redesigning again, keep it operational and dashboard-focused. Avoid marketing-page hero patterns, decorative card spam, and changes that reduce table readability.
+
+### Non-Negotiable Constraints
+
+- Do not change `record_uid`.
+- Do not modify the device sync payload unless the user explicitly requests it.
+- Do not delete or mutate existing transaction rows for display-only fixes.
+- Do not rely on browser timezone conversion for E60 transaction display time.
+- Keep latest transactions ordered by `id DESC` or `received_at DESC`, not corrected transaction time.
+- Preserve Railway internal database connection through `${{Postgres.DATABASE_URL}}`.
