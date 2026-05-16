@@ -27,6 +27,17 @@ export const api = {
   me: (token) => request("/api/auth/me", { token }),
   users: (token) => request("/api/users", { token }),
   createUser: (token, user) => request("/api/users", { method: "POST", token, body: user }),
+  routes: (token) => request("/api/routes", { token }),
+  createRoute: (token, route) => request("/api/routes", { method: "POST", token, body: route }),
+  updateRoute: (token, route) => request(`/api/routes/${route.id}`, { method: "PUT", token, body: route }),
+  buses: (token) => request("/api/buses", { token }),
+  createBus: (token, bus) => request("/api/buses", { method: "POST", token, body: bus }),
+  changeBusRoute: (token, busId, activeRouteId) =>
+    request(`/api/buses/${busId}/active-route`, {
+      method: "PUT",
+      token,
+      body: { active_route_id: activeRouteId }
+    }),
   summary: () => request("/api/reports/summary"),
   daily: () => request("/api/reports/daily"),
   devices: () => request("/api/reports/devices"),

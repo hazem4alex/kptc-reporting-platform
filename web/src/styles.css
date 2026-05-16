@@ -777,6 +777,31 @@ main {
   opacity: 0.75;
 }
 
+.small-action {
+  background: rgba(0, 229, 200, 0.12);
+  border: 1px solid var(--line-hover);
+  border-radius: 5px;
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  min-height: 34px;
+  padding: 7px 10px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.small-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.muted-action {
+  background: transparent;
+  color: var(--ink-2);
+}
+
 /* 13. Page layout ------------------------------------------- */
 .page {
   display: grid;
@@ -981,6 +1006,43 @@ input:focus,
 select:focus {
   border-color: var(--accent-dim);
   outline: none;
+}
+
+.inline-actions {
+  align-items: center;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(66px, 0.45fr) minmax(160px, 1fr) minmax(82px, 0.35fr) auto auto;
+  min-width: 620px;
+}
+
+.inline-actions input {
+  min-height: 34px;
+}
+
+.status-pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-pill.active {
+  background: rgba(0, 204, 106, 0.08);
+  border-color: rgba(0, 204, 106, 0.32);
+  color: var(--brand-green);
+}
+
+.status-pill.inactive {
+  background: rgba(255, 53, 85, 0.08);
+  border-color: rgba(255, 53, 85, 0.28);
+  color: var(--brand-red);
 }
 
 /* 20. KPI cards (Bootstrap row/col handles the grid) --------- */

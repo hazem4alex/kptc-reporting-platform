@@ -3,10 +3,12 @@ import { api } from "./api.js";
 import { ErrorState, Loading } from "./components/DataState.jsx";
 import { createTranslator } from "./i18n.js";
 import { CardTypes } from "./pages/CardTypes.jsx";
+import { BusesManagement } from "./pages/BusesManagement.jsx";
 import { Devices } from "./pages/Devices.jsx";
 import { LiveMap } from "./pages/LiveMap.jsx";
 import { Login } from "./pages/Login.jsx";
 import { Overview } from "./pages/Overview.jsx";
+import { RoutesManagement } from "./pages/RoutesManagement.jsx";
 import { Transactions } from "./pages/Transactions.jsx";
 import { Users } from "./pages/Users.jsx";
 
@@ -51,6 +53,27 @@ function Icon({ name }) {
       </svg>
     );
   }
+  if (name === "routes") {
+    return (
+      <svg {...props}>
+        <path d="M4 18c4 0 4-12 8-12s4 12 8 12" />
+        <circle cx="4" cy="18" r="1.5" />
+        <circle cx="12" cy="6" r="1.5" />
+        <circle cx="20" cy="18" r="1.5" />
+      </svg>
+    );
+  }
+  if (name === "buses") {
+    return (
+      <svg {...props}>
+        <rect height="11" rx="2" width="18" x="3" y="5" />
+        <path d="M7 5V3h10v2" />
+        <path d="M6 11h12" />
+        <circle cx="7" cy="18" r="1.5" />
+        <circle cx="17" cy="18" r="1.5" />
+      </svg>
+    );
+  }
   if (name === "card-types") {
     return (
       <svg {...props}>
@@ -85,6 +108,8 @@ const nav = [
   { id: "overview",     label: "overview"     },
   { id: "transactions", label: "transactions" },
   { id: "devices",      label: "devices"      },
+  { id: "routes",       label: "routes"       },
+  { id: "buses",        label: "buses"        },
   { id: "card-types",   label: "cardTypes"    },
   { id: "live-map",     label: "liveMap"      },
   { id: "users",        label: "users"        }
@@ -159,6 +184,10 @@ export default function App() {
           api.locations(),
           api.users(session.token)
         ]);
+        const [routes, buses] = await Promise.all([
+          api.routes(session.token),
+          api.buses(session.token)
+        ]);
 
         if (!cancelled) {
           setData({
@@ -167,7 +196,9 @@ export default function App() {
             devices: devices.data,
             transactions: transactions.data,
             cardTypes: cardTypes.data,
-            locations: locations.data
+            locations: locations.data,
+            routes: routes.data,
+            buses: buses.data
           });
           setUsers(appUsers.data);
           setError("");
@@ -190,6 +221,20 @@ export default function App() {
     if (!data) return null;
     if (active === "transactions") return <Transactions rows={data.transactions} t={t} />;
     if (active === "devices") return <Devices rows={data.devices} t={t} />;
+    if (active === "routes") {
+      return <RoutesManagement rows={data.routes} t={t} onCreateRoute={createRoute} onUpdateRoute={updateRoute} />;
+    }
+    if (active === "buses") {
+      return (
+        <BusesManagement
+          rows={data.buses}
+          routes={data.routes}
+          t={t}
+          onCreateBus={createBus}
+          onChangeRoute={changeBusRoute}
+        />
+      );
+    }
     if (active === "card-types") return <CardTypes rows={data.cardTypes} t={t} />;
     if (active === "live-map") return <LiveMap rows={data.locations} t={t} />;
     if (active === "users") return <Users rows={users} t={t} onCreateUser={createUser} />;
@@ -225,6 +270,44 @@ export default function App() {
   async function createUser(user) {
     const result = await api.createUser(session.token, user);
     setUsers((current) => [...current, result.data]);
+  }
+
+  async function createRoute(route) {
+    const result = await api.createRoute(session.token, route);
+    setData((current) => ({ ...current, routes: [...current.routes, result.data] }));
+  }
+
+  async function updateRoute(route) {
+    const result = await api.updateRoute(session.token, route);
+    setData((current) => ({
+      ...current,
+      routes: current.routes.map((item) => (item.id === result.data.id ? result.data : item)),
+      buses: current.buses.map((bus) =>
+        bus.active_route_id === result.data.id
+          ? {
+              ...bus,
+              route_code: result.data.route_code,
+              route_name: result.data.route_name,
+              fare_fils: result.data.fare_fils,
+              route_is_active: result.data.is_active
+            }
+          : bus
+      )
+    }));
+  }
+
+  async function createBus(bus) {
+    const result = await api.createBus(session.token, bus);
+    const refreshed = await api.buses(session.token);
+    setData((current) => ({ ...current, buses: refreshed.data.length ? refreshed.data : [...current.buses, result.data] }));
+  }
+
+  async function changeBusRoute(busId, activeRouteId) {
+    const result = await api.changeBusRoute(session.token, busId, activeRouteId);
+    setData((current) => ({
+      ...current,
+      buses: current.buses.map((item) => (item.id === result.data.id ? result.data : item))
+    }));
   }
 
   if (!session) {

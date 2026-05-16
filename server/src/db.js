@@ -28,6 +28,38 @@ export async function initDb() {
     ALTER TABLE devices ADD COLUMN IF NOT EXISTS route_name text NULL;
     ALTER TABLE devices ADD COLUMN IF NOT EXISTS route_extra jsonb NULL;
 
+    CREATE TABLE IF NOT EXISTS routes (
+      id text PRIMARY KEY,
+      route_code text UNIQUE NOT NULL,
+      route_name text NOT NULL,
+      fare_fils int NOT NULL CHECK (fare_fils >= 0),
+      is_active boolean NOT NULL DEFAULT true,
+      created_at timestamptz DEFAULT now(),
+      updated_at timestamptz DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS buses (
+      id text PRIMARY KEY,
+      bus_code text UNIQUE NOT NULL,
+      plate_number text NULL,
+      device_id text UNIQUE NOT NULL REFERENCES devices(device_id),
+      active_route_id text NULL REFERENCES routes(id),
+      route_config_version int NOT NULL DEFAULT 1,
+      created_at timestamptz DEFAULT now(),
+      updated_at timestamptz DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS route_change_logs (
+      id bigserial PRIMARY KEY,
+      bus_id text NOT NULL REFERENCES buses(id) ON DELETE CASCADE,
+      old_route_id text NULL REFERENCES routes(id),
+      new_route_id text NULL REFERENCES routes(id),
+      old_fare_fils int NULL,
+      new_fare_fils int NULL,
+      changed_by text NULL,
+      created_at timestamptz DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS transactions (
       id bigserial PRIMARY KEY,
       record_uid text UNIQUE NOT NULL,
@@ -106,9 +138,13 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_sync_batches_device_created ON sync_batches(device_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_buses_device_id ON buses(device_id);
+    CREATE INDEX IF NOT EXISTS idx_buses_active_route_id ON buses(active_route_id);
+    CREATE INDEX IF NOT EXISTS idx_route_change_logs_bus_created ON route_change_logs(bus_id, created_at DESC);
   `);
 
   await seedAdminUser();
+  await seedRoutesAndBuses();
 }
 
 async function seedAdminUser() {
@@ -121,5 +157,38 @@ async function seedAdminUser() {
       VALUES ($1, $2, $3, $4)
     `,
     ["admin", hashPassword("Admin@123"), "admin", "System Administrator"]
+  );
+}
+
+async function seedRoutesAndBuses() {
+  await pool.query(
+    `
+      INSERT INTO routes (id, route_code, route_name, fare_fils, is_active)
+      VALUES
+        ('R12', '12', 'Route 12 - Salmiya', 250, true),
+        ('R15', '15', 'Route 15 - Kuwait City', 300, true),
+        ('R20', '20', 'Route 20 - Farwaniya', 200, true)
+      ON CONFLICT (id) DO NOTHING
+    `
+  );
+
+  await pool.query(
+    `
+      INSERT INTO devices (device_id, bus_no, route_no, route_name)
+      VALUES
+        ('E60_TEST_001', 'BUS-101', '12', 'Route 12 - Salmiya'),
+        ('E60_TEST_002', 'BUS-102', '20', 'Route 20 - Farwaniya')
+      ON CONFLICT (device_id) DO NOTHING
+    `
+  );
+
+  await pool.query(
+    `
+      INSERT INTO buses (id, bus_code, plate_number, device_id, active_route_id, route_config_version)
+      VALUES
+        ('BUS-101', 'BUS-101', 'KPTC-101', 'E60_TEST_001', 'R12', 1),
+        ('BUS-102', 'BUS-102', 'KPTC-102', 'E60_TEST_002', 'R20', 1)
+      ON CONFLICT (id) DO NOTHING
+    `
   );
 }

@@ -38,6 +38,9 @@ DEVICE_TIME_OFFSET_HOURS=-5
 The server creates these tables automatically on startup if they do not exist:
 
 - `devices`
+- `routes`
+- `buses`
+- `route_change_logs`
 - `transactions`
 - `bus_locations`
 - `sync_batches`
@@ -152,6 +155,70 @@ Response:
 The deduplication key is `record_uid`. The server uses `ON CONFLICT(record_uid) DO NOTHING`, so repeated uploads are safe.
 
 Root-level `bus_no`, `route_no`, `route_name`, and `route_extra` are upserted into `devices` on every bulk upload.
+
+### Routes and Buses
+
+Route and bus management endpoints require dashboard bearer auth:
+
+```bash
+TOKEN="$(curl -s -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin@123"}' \
+  | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).token')"
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:4000/api/routes
+
+curl -X POST http://localhost:4000/api/routes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"route_code":"25","route_name":"Route 25 - Hawally","fare_fils":250}'
+
+curl -X PUT http://localhost:4000/api/routes/R25 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"route_code":"25","route_name":"Route 25 - Hawally","fare_fils":300,"is_active":true}'
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:4000/api/buses
+
+curl -X POST http://localhost:4000/api/buses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"bus_code":"BUS-103","plate_number":"KPTC-103","device_id":"E60_TEST_003","active_route_id":"R12"}'
+
+curl -X PUT http://localhost:4000/api/buses/BUS-101/active-route \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"active_route_id":"R15"}'
+```
+
+Changing a bus active route increments `route_config_version` and writes a `route_change_logs` row.
+
+### Device Active Route Sync
+
+The E60 sync tool can read the assigned active route and fare with the same `x-api-key` mechanism as transaction upload:
+
+```bash
+curl http://localhost:4000/api/devices/E60_TEST_001/active-route \
+  -H "x-api-key: change-me"
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "device_id": "E60_TEST_001",
+  "bus_id": "BUS-101",
+  "version": 3,
+  "route_id": "R12",
+  "route_code": "12",
+  "route_name": "Route 12 - Salmiya",
+  "fare_fils": 250,
+  "updated_at": "2026-05-17T10:00:00.000Z"
+}
+```
+
+Missing device returns `{"success":false,"error":"DEVICE_NOT_FOUND"}` with HTTP 404. A bus without an assigned route returns `{"success":false,"error":"NO_ACTIVE_ROUTE"}` with HTTP 404.
 
 ### Bus Location Upload
 

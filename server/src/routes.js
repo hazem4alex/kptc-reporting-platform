@@ -11,6 +11,21 @@ const deviceTimeOffsetHours = Number.isFinite(configuredDeviceTimeOffset)
   ? configuredDeviceTimeOffset
   : -5;
 
+function parseNonNegativeInteger(value, fieldName) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) {
+    const err = new Error(`${fieldName} must be a non-negative integer`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return number;
+}
+
+function routeIdFromCode(routeCode) {
+  const normalized = String(routeCode).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return `R${normalized || Date.now()}`;
+}
+
 const rawWithDeviceOffsetSql = `
   CASE
     WHEN transaction_datetime_raw ~ '^\\d{14}$' THEN
@@ -308,6 +323,293 @@ router.post("/api/buses/location", requireApiKey, async (req, res, next) => {
     );
 
     res.status(201).json({ success: true, id: result.rows[0].id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/api/routes", requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, route_code, route_name, fare_fils, is_active, created_at, updated_at
+      FROM routes
+      ORDER BY route_code ASC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/routes", requireAuth, async (req, res, next) => {
+  try {
+    const routeCode = requiredString(req.body?.route_code, "route_code");
+    const routeName = requiredString(req.body?.route_name, "route_name");
+    const fareFils = parseNonNegativeInteger(req.body?.fare_fils, "fare_fils");
+    const id = routeIdFromCode(routeCode);
+
+    const result = await pool.query(
+      `
+        INSERT INTO routes (id, route_code, route_name, fare_fils)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, route_code, route_name, fare_fils, is_active, created_at, updated_at
+      `,
+      [id, routeCode, routeName, fareFils]
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.put("/api/routes/:id", requireAuth, async (req, res, next) => {
+  try {
+    const routeCode = requiredString(req.body?.route_code, "route_code");
+    const routeName = requiredString(req.body?.route_name, "route_name");
+    const fareFils = parseNonNegativeInteger(req.body?.fare_fils, "fare_fils");
+    const isActive = req.body?.is_active !== false;
+
+    const result = await pool.query(
+      `
+        UPDATE routes
+        SET route_code = $2,
+            route_name = $3,
+            fare_fils = $4,
+            is_active = $5,
+            updated_at = now()
+        WHERE id = $1
+        RETURNING id, route_code, route_name, fare_fils, is_active, created_at, updated_at
+      `,
+      [req.params.id, routeCode, routeName, fareFils, isActive]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.get("/api/buses", requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        b.id,
+        b.bus_code,
+        b.plate_number,
+        b.device_id,
+        b.active_route_id,
+        b.route_config_version,
+        b.created_at,
+        b.updated_at,
+        r.route_code,
+        r.route_name,
+        r.fare_fils,
+        r.is_active AS route_is_active
+      FROM buses b
+      LEFT JOIN routes r ON r.id = b.active_route_id
+      ORDER BY b.bus_code ASC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/buses", requireAuth, async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const busCode = requiredString(req.body?.bus_code, "bus_code");
+    const deviceId = requiredString(req.body?.device_id, "device_id");
+    const plateNumber = req.body?.plate_number || null;
+    const activeRouteId = req.body?.active_route_id || null;
+
+    await client.query("BEGIN");
+    await client.query(
+      `
+        INSERT INTO devices (device_id, bus_no)
+        VALUES ($1, $2)
+        ON CONFLICT (device_id) DO UPDATE SET bus_no = COALESCE(devices.bus_no, EXCLUDED.bus_no)
+      `,
+      [deviceId, busCode]
+    );
+
+    const result = await client.query(
+      `
+        INSERT INTO buses (id, bus_code, plate_number, device_id, active_route_id)
+        VALUES ($1, $1, $2, $3, $4)
+        RETURNING id, bus_code, plate_number, device_id, active_route_id, route_config_version, created_at, updated_at
+      `,
+      [busCode, plateNumber, deviceId, activeRouteId]
+    );
+
+    await client.query("COMMIT");
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    if (err.code === "23503") err.statusCode = 400;
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const newRouteId = requiredString(req.body?.active_route_id, "active_route_id");
+
+    await client.query("BEGIN");
+
+    const bus = await client.query(
+      `
+        SELECT b.id, b.active_route_id, b.route_config_version, old_route.fare_fils AS old_fare_fils
+        FROM buses b
+        LEFT JOIN routes old_route ON old_route.id = b.active_route_id
+        WHERE b.id = $1
+        FOR UPDATE OF b
+      `,
+      [req.params.id]
+    );
+
+    if (bus.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, error: "BUS_NOT_FOUND" });
+    }
+
+    const nextRoute = await client.query(
+      "SELECT id, fare_fils FROM routes WHERE id = $1",
+      [newRouteId]
+    );
+
+    if (nextRoute.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    }
+
+    const current = bus.rows[0];
+    if (current.active_route_id === newRouteId) {
+      const unchanged = await client.query(
+        `
+          SELECT
+            b.id, b.bus_code, b.plate_number, b.device_id, b.active_route_id,
+            b.route_config_version, b.created_at, b.updated_at,
+            r.route_code, r.route_name, r.fare_fils, r.is_active AS route_is_active
+          FROM buses b
+          LEFT JOIN routes r ON r.id = b.active_route_id
+          WHERE b.id = $1
+        `,
+        [req.params.id]
+      );
+      await client.query("COMMIT");
+      return res.json({ success: true, data: unchanged.rows[0] });
+    }
+
+    const updated = await client.query(
+      `
+        UPDATE buses
+        SET active_route_id = $2,
+            route_config_version = route_config_version + 1,
+            updated_at = now()
+        WHERE id = $1
+        RETURNING id, bus_code, plate_number, device_id, active_route_id, route_config_version, created_at, updated_at
+      `,
+      [req.params.id, newRouteId]
+    );
+
+    await client.query(
+      `
+        INSERT INTO route_change_logs (
+          bus_id, old_route_id, new_route_id, old_fare_fils, new_fare_fils, changed_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        req.params.id,
+        current.active_route_id,
+        newRouteId,
+        current.old_fare_fils,
+        nextRoute.rows[0].fare_fils,
+        req.user?.username || null
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    const route = await pool.query(
+      `
+        SELECT
+          b.id, b.bus_code, b.plate_number, b.device_id, b.active_route_id,
+          b.route_config_version, b.created_at, b.updated_at,
+          r.route_code, r.route_name, r.fare_fils, r.is_active AS route_is_active
+        FROM buses b
+        LEFT JOIN routes r ON r.id = b.active_route_id
+        WHERE b.id = $1
+      `,
+      [updated.rows[0].id]
+    );
+
+    res.json({ success: true, data: route.rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+router.get("/api/devices/:deviceId/active-route", requireApiKey, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          b.id AS bus_id,
+          b.device_id,
+          b.active_route_id,
+          b.route_config_version,
+          b.updated_at,
+          r.id AS route_id,
+          r.route_code,
+          r.route_name,
+          r.fare_fils
+        FROM buses b
+        LEFT JOIN routes r ON r.id = b.active_route_id
+        WHERE b.device_id = $1
+      `,
+      [req.params.deviceId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, error: "DEVICE_NOT_FOUND" });
+    }
+
+    const row = result.rows[0];
+    if (!row.active_route_id || !row.route_id) {
+      return res.status(404).json({ success: false, error: "NO_ACTIVE_ROUTE" });
+    }
+
+    res.json({
+      success: true,
+      device_id: row.device_id,
+      bus_id: row.bus_id,
+      version: row.route_config_version,
+      route_id: row.route_id,
+      route_code: row.route_code,
+      route_name: row.route_name,
+      fare_fils: row.fare_fils,
+      updated_at: row.updated_at
+    });
   } catch (err) {
     next(err);
   }
