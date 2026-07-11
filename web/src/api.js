@@ -32,6 +32,7 @@ export const api = {
   updateRoute: (token, route) => request(`/api/routes/${route.id}`, { method: "PUT", token, body: route }),
   buses: (token) => request("/api/buses", { token }),
   createBus: (token, bus) => request("/api/buses", { method: "POST", token, body: bus }),
+  updateBus: (token, busId, bus) => request(`/api/buses/${busId}`, { method: "PUT", token, body: bus }),
   changeBusRoute: (token, busId, activeRouteId) =>
     request(`/api/buses/${busId}/active-route`, {
       method: "PUT",

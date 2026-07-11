@@ -231,6 +231,7 @@ export default function App() {
           routes={data.routes}
           t={t}
           onCreateBus={createBus}
+          onUpdateBus={updateBus}
           onChangeRoute={changeBusRoute}
         />
       );
@@ -279,27 +280,26 @@ export default function App() {
 
   async function updateRoute(route) {
     const result = await api.updateRoute(session.token, route);
+    const refreshedBuses = await api.buses(session.token);
     setData((current) => ({
       ...current,
       routes: current.routes.map((item) => (item.id === result.data.id ? result.data : item)),
-      buses: current.buses.map((bus) =>
-        bus.active_route_id === result.data.id
-          ? {
-              ...bus,
-              route_code: result.data.route_code,
-              route_name: result.data.route_name,
-              fare_fils: result.data.fare_fils,
-              route_is_active: result.data.is_active
-            }
-          : bus
-      )
+      buses: refreshedBuses.data
     }));
+    return result.data;
   }
 
   async function createBus(bus) {
     const result = await api.createBus(session.token, bus);
     const refreshed = await api.buses(session.token);
     setData((current) => ({ ...current, buses: refreshed.data.length ? refreshed.data : [...current.buses, result.data] }));
+    return result.data;
+  }
+
+  async function updateBus(busId, bus) {
+    const result = await api.updateBus(session.token, busId, bus);
+    setData((current) => ({ ...current, buses: current.buses.map((item) => item.id === busId ? result.data : item) }));
+    return result.data;
   }
 
   async function changeBusRoute(busId, activeRouteId) {
@@ -308,6 +308,7 @@ export default function App() {
       ...current,
       buses: current.buses.map((item) => (item.id === result.data.id ? result.data : item))
     }));
+    return result.data;
   }
 
   if (!session) {

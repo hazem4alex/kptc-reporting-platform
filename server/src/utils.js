@@ -65,6 +65,12 @@ export function requiredString(value, name) {
   return value.trim();
 }
 
+export function formatFareKwd(fareFils) {
+  const value = Number(fareFils);
+  if (!Number.isInteger(value) || value < 0) return null;
+  return (value / 1000).toFixed(3);
+}
+
 export function getMoneyScale(amountRaw) {
   const n = Number(amountRaw);
   if (n === 25) return 100;

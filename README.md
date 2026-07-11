@@ -35,7 +35,13 @@ PORT=4000
 DEVICE_TIME_OFFSET_HOURS=-5
 ```
 
-The server creates these tables automatically on startup if they do not exist:
+The server creates these tables automatically on startup if they do not exist. For an existing
+deployment, apply the versioned migration before deploying the new application code:
+
+```bash
+npm run migrate
+npm run seed
+```
 
 - `devices`
 - `routes`
@@ -192,6 +198,14 @@ curl -X PUT http://localhost:4000/api/buses/BUS-101/active-route \
 ```
 
 Changing a bus active route increments `route_config_version` and writes a `route_change_logs` row.
+Submitting the same route is a no-op. Changing a route fare increments the version of every assigned
+bus in the same database transaction. `fare_fils` is always stored as a non-negative integer; the API
+adds a three-decimal `fare_kwd` display value.
+
+The database's existing `buses.bus_code` field is the vehicle number. API responses expose it as
+`bus_number` while retaining `bus_code` for backwards compatibility. The existing
+`route_change_logs` table is the route assignment audit log and has been extended with device and
+bus-number before/after values.
 
 ### Device Active Route Sync
 
@@ -209,14 +223,48 @@ Success response:
   "success": true,
   "device_id": "E60_TEST_001",
   "bus_id": "BUS-101",
+  "bus_number": "BUS-101",
   "version": 3,
   "route_id": "R12",
   "route_code": "12",
   "route_name": "Route 12 - Salmiya",
   "fare_fils": 250,
+  "fare_kwd": "0.250",
   "updated_at": "2026-05-17T10:00:00.000Z"
 }
 ```
+
+## Production verification
+
+Windows Command Prompt examples for the Railway deployment:
+
+```bat
+curl -X POST "https://kptc-reporting-platform-production.up.railway.app/api/auth/login" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"username\":\"admin\",\"password\":\"Admin@123\"}"
+
+curl "https://kptc-reporting-platform-production.up.railway.app/api/routes" ^
+  -H "Authorization: Bearer TOKEN"
+
+curl -k -sS ^
+  -H "x-api-key: YOUR_RAILWAY_API_KEY" ^
+  "https://kptc-reporting-platform-production.up.railway.app/api/devices/90010012/active-route"
+```
+
+Required API environment variables are `DATABASE_URL`, `API_KEY`, and optionally `PORT` and
+`DEVICE_TIME_OFFSET_HOURS`. Set `VITE_API_BASE_URL` for the dashboard build. In the curl example,
+`YOUR_RAILWAY_API_KEY` must contain the value configured in the server's `API_KEY` variable; the
+secret is never sent to or stored in the dashboard.
+
+Run fast tests and the production dashboard build with:
+
+```bash
+npm test
+```
+
+Set `TEST_DATABASE_URL` to a disposable PostgreSQL database to enable the API integration suite.
+It covers authentication, device API-key rejection, route/device creation, exact version changes,
+fare propagation, and the existing bulk-upload deduplication path.
 
 Missing device returns `{"success":false,"error":"DEVICE_NOT_FOUND"}` with HTTP 404. A bus without an assigned route returns `{"success":false,"error":"NO_ACTIVE_ROUTE"}` with HTTP 404.
 

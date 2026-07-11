@@ -58,6 +58,7 @@ export const translations = {
     inactive: "Inactive",
     activate: "Activate",
     deactivate: "Deactivate",
+    edit: "Edit", cancel: "Cancel", close: "Close",
 
     // Overview
     opsCommand: "Operations command",
@@ -126,6 +127,11 @@ export const translations = {
     activeFare: "Active fare",
     assignActiveRoute: "Assign active route",
     configVersion: "Config version",
+    assignedBuses: "Assigned buses", registerDevice: "Register device / bus",
+    deviceId: "Device ID", busNumber: "Bus number", routeFare: "Route fare",
+    saveAssignment: "Save assignment", configurationSaved: "Configuration saved. Version:",
+    searchDeviceBus: "Search device ID or bus number", allRoutes: "All routes",
+    editDevice: "Edit device / bus", deviceConfiguration: "Device configuration",
 
     // Card types
     fareMedia: "Fare media",
@@ -199,6 +205,7 @@ export const translations = {
     inactive: "غير نشط",
     activate: "تفعيل",
     deactivate: "تعطيل",
+    edit: "تعديل", cancel: "إلغاء", close: "إغلاق",
 
     // Overview
     opsCommand: "مركز العمليات",
@@ -267,6 +274,11 @@ export const translations = {
     activeFare: "الأجرة النشطة",
     assignActiveRoute: "تعيين المسار النشط",
     configVersion: "إصدار الإعداد",
+    assignedBuses: "الحافلات المعيّنة", registerDevice: "تسجيل جهاز وحافلة",
+    deviceId: "معرّف الجهاز", busNumber: "رقم الحافلة", routeFare: "أجرة المسار",
+    saveAssignment: "حفظ التعيين", configurationSaved: "تم حفظ الإعداد. الإصدار:",
+    searchDeviceBus: "ابحث بمعرّف الجهاز أو رقم الحافلة", allRoutes: "كل المسارات",
+    editDevice: "تعديل الجهاز والحافلة", deviceConfiguration: "إعداد الجهاز",
 
     // Card types
     fareMedia: "وسائط الأجرة",

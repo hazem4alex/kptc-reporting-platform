@@ -57,8 +57,19 @@ export async function initDb() {
       old_fare_fils int NULL,
       new_fare_fils int NULL,
       changed_by text NULL,
+      old_device_id text NULL,
+      new_device_id text NULL,
+      old_bus_number text NULL,
+      new_bus_number text NULL,
       created_at timestamptz DEFAULT now()
     );
+
+    ALTER TABLE buses ALTER COLUMN route_config_version SET DEFAULT 1;
+    UPDATE buses SET route_config_version = 1 WHERE route_config_version IS NULL OR route_config_version < 1;
+    ALTER TABLE route_change_logs ADD COLUMN IF NOT EXISTS old_device_id text NULL;
+    ALTER TABLE route_change_logs ADD COLUMN IF NOT EXISTS new_device_id text NULL;
+    ALTER TABLE route_change_logs ADD COLUMN IF NOT EXISTS old_bus_number text NULL;
+    ALTER TABLE route_change_logs ADD COLUMN IF NOT EXISTS new_bus_number text NULL;
 
     CREATE TABLE IF NOT EXISTS transactions (
       id bigserial PRIMARY KEY,
@@ -165,7 +176,7 @@ async function seedRoutesAndBuses() {
     `
       INSERT INTO routes (id, route_code, route_name, fare_fils, is_active)
       VALUES
-        ('R12', '12', 'Route 12 - Salmiya', 250, true),
+        ('R12', '12', 'Murqab', 250, true),
         ('R15', '15', 'Route 15 - Kuwait City', 300, true),
         ('R20', '20', 'Route 20 - Farwaniya', 200, true)
       ON CONFLICT (id) DO NOTHING
@@ -184,10 +195,29 @@ async function seedRoutesAndBuses() {
 
   await pool.query(
     `
+      INSERT INTO devices (device_id, bus_no, route_no, route_name)
+      VALUES ('90010012', '90010011', '12', 'Murqab')
+      ON CONFLICT (device_id) DO UPDATE SET
+        bus_no = COALESCE(devices.bus_no, EXCLUDED.bus_no),
+        route_no = COALESCE(devices.route_no, EXCLUDED.route_no),
+        route_name = COALESCE(devices.route_name, EXCLUDED.route_name)
+    `
+  );
+
+  await pool.query(
+    `
       INSERT INTO buses (id, bus_code, plate_number, device_id, active_route_id, route_config_version)
       VALUES
         ('BUS-101', 'BUS-101', 'KPTC-101', 'E60_TEST_001', 'R12', 1),
         ('BUS-102', 'BUS-102', 'KPTC-102', 'E60_TEST_002', 'R20', 1)
+      ON CONFLICT (id) DO NOTHING
+    `
+  );
+
+  await pool.query(
+    `
+      INSERT INTO buses (id, bus_code, device_id, active_route_id, route_config_version)
+      VALUES ('90010011', '90010011', '90010012', 'R12', 1)
       ON CONFLICT (id) DO NOTHING
     `
   );

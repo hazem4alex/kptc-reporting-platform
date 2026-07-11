@@ -2,7 +2,7 @@ import express from "express";
 import { createToken, hashPassword, verifyPassword } from "./auth.js";
 import { pool } from "./db.js";
 import { requireApiKey, requireAuth } from "./middleware.js";
-import { applyMoneyScale, parseDateTime, parseNumeric, parsePositiveInt, parseRawWithOffset, requiredString } from "./utils.js";
+import { applyMoneyScale, formatFareKwd, parseDateTime, parseNumeric, parsePositiveInt, parseRawWithOffset, requiredString } from "./utils.js";
 
 export const router = express.Router();
 
@@ -24,6 +24,23 @@ function parseNonNegativeInteger(value, fieldName) {
 function routeIdFromCode(routeCode) {
   const normalized = String(routeCode).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   return `R${normalized || Date.now()}`;
+}
+
+function routeResponse(row) {
+  return row ? { ...row, fare_fils: Number(row.fare_fils), fare_kwd: formatFareKwd(row.fare_fils) } : row;
+}
+
+function busResponse(row) {
+  if (!row) return row;
+  const fareFils = row.fare_fils == null ? null : Number(row.fare_fils);
+  return {
+    ...row,
+    bus_number: row.bus_number ?? row.bus_code,
+    active_route_code: row.active_route_code ?? row.route_code ?? null,
+    active_route_name: row.active_route_name ?? row.route_name ?? null,
+    fare_fils: fareFils,
+    fare_kwd: formatFareKwd(fareFils)
+  };
 }
 
 const rawWithDeviceOffsetSql = `
@@ -331,12 +348,15 @@ router.post("/api/buses/location", requireApiKey, async (req, res, next) => {
 router.get("/api/routes", requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(`
-      SELECT id, route_code, route_name, fare_fils, is_active, created_at, updated_at
-      FROM routes
+      SELECT r.id, r.route_code, r.route_name, r.fare_fils, r.is_active,
+             r.created_at, r.updated_at, COUNT(b.id)::int AS assigned_buses_count
+      FROM routes r
+      LEFT JOIN buses b ON b.active_route_id = r.id
+      GROUP BY r.id
       ORDER BY route_code ASC
     `);
 
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows.map(routeResponse) });
   } catch (err) {
     next(err);
   }
@@ -351,14 +371,14 @@ router.post("/api/routes", requireAuth, async (req, res, next) => {
 
     const result = await pool.query(
       `
-        INSERT INTO routes (id, route_code, route_name, fare_fils)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO routes (id, route_code, route_name, fare_fils, is_active)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING id, route_code, route_name, fare_fils, is_active, created_at, updated_at
       `,
-      [id, routeCode, routeName, fareFils]
+      [id, routeCode, routeName, fareFils, req.body?.is_active !== false]
     );
 
-    res.status(201).json({ success: true, data: result.rows[0] });
+    res.status(201).json({ success: true, data: routeResponse({ ...result.rows[0], assigned_buses_count: 0 }) });
   } catch (err) {
     if (err.code === "23505") err.statusCode = 409;
     next(err);
@@ -366,13 +386,21 @@ router.post("/api/routes", requireAuth, async (req, res, next) => {
 });
 
 router.put("/api/routes/:id", requireAuth, async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const routeCode = requiredString(req.body?.route_code, "route_code");
     const routeName = requiredString(req.body?.route_name, "route_name");
     const fareFils = parseNonNegativeInteger(req.body?.fare_fils, "fare_fils");
     const isActive = req.body?.is_active !== false;
 
-    const result = await pool.query(
+    await client.query("BEGIN");
+    const existing = await client.query("SELECT * FROM routes WHERE id = $1 FOR UPDATE", [req.params.id]);
+    if (existing.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    }
+
+    const result = await client.query(
       `
         UPDATE routes
         SET route_code = $2,
@@ -386,14 +414,34 @@ router.put("/api/routes/:id", requireAuth, async (req, res, next) => {
       [req.params.id, routeCode, routeName, fareFils, isActive]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    if (Number(existing.rows[0].fare_fils) !== fareFils) {
+      await client.query(
+        `INSERT INTO route_change_logs
+          (bus_id, old_route_id, new_route_id, old_fare_fils, new_fare_fils,
+           old_device_id, new_device_id, old_bus_number, new_bus_number, changed_by)
+         SELECT b.id, b.active_route_id, b.active_route_id, $2, $3,
+                b.device_id, b.device_id, b.bus_code, b.bus_code, $4
+         FROM buses b WHERE b.active_route_id = $1`,
+        [req.params.id, existing.rows[0].fare_fils, fareFils, req.user?.username || null]
+      );
+      await client.query(
+        `UPDATE buses
+         SET route_config_version = route_config_version + 1, updated_at = now()
+         WHERE active_route_id = $1`,
+        [req.params.id]
+      );
     }
 
-    res.json({ success: true, data: result.rows[0] });
+    const count = await client.query("SELECT COUNT(*)::int AS count FROM buses WHERE active_route_id = $1", [req.params.id]);
+    await client.query("COMMIT");
+
+    res.json({ success: true, data: routeResponse({ ...result.rows[0], assigned_buses_count: count.rows[0].count }) });
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     if (err.code === "23505") err.statusCode = 409;
     next(err);
+  } finally {
+    client.release();
   }
 });
 
@@ -403,6 +451,7 @@ router.get("/api/buses", requireAuth, async (req, res, next) => {
       SELECT
         b.id,
         b.bus_code,
+        b.bus_code AS bus_number,
         b.plate_number,
         b.device_id,
         b.active_route_id,
@@ -410,7 +459,9 @@ router.get("/api/buses", requireAuth, async (req, res, next) => {
         b.created_at,
         b.updated_at,
         r.route_code,
+        r.route_code AS active_route_code,
         r.route_name,
+        r.route_name AS active_route_name,
         r.fare_fils,
         r.is_active AS route_is_active
       FROM buses b
@@ -418,7 +469,7 @@ router.get("/api/buses", requireAuth, async (req, res, next) => {
       ORDER BY b.bus_code ASC
     `);
 
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows.map(busResponse) });
   } catch (err) {
     next(err);
   }
@@ -428,12 +479,23 @@ router.post("/api/buses", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
 
   try {
-    const busCode = requiredString(req.body?.bus_code, "bus_code");
+    const busCode = requiredString(req.body?.bus_number ?? req.body?.bus_code, "bus_number");
     const deviceId = requiredString(req.body?.device_id, "device_id");
     const plateNumber = req.body?.plate_number || null;
     const activeRouteId = req.body?.active_route_id || null;
 
     await client.query("BEGIN");
+    if (activeRouteId) {
+      const route = await client.query("SELECT is_active FROM routes WHERE id = $1", [activeRouteId]);
+      if (route.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+      }
+      if (!route.rows[0].is_active) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ success: false, error: "ROUTE_INACTIVE" });
+      }
+    }
     await client.query(
       `
         INSERT INTO devices (device_id, bus_no)
@@ -453,7 +515,13 @@ router.post("/api/buses", requireAuth, async (req, res, next) => {
     );
 
     await client.query("COMMIT");
-    res.status(201).json({ success: true, data: result.rows[0] });
+    const configured = await pool.query(
+      `SELECT b.*, b.bus_code AS bus_number, r.route_code, r.route_name, r.fare_fils,
+              r.is_active AS route_is_active
+       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id WHERE b.id = $1`,
+      [result.rows[0].id]
+    );
+    res.status(201).json({ success: true, data: busResponse(configured.rows[0]) });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     if (err.code === "23503") err.statusCode = 400;
@@ -462,6 +530,71 @@ router.post("/api/buses", requireAuth, async (req, res, next) => {
   } finally {
     client.release();
   }
+});
+
+router.put("/api/buses/:id", requireAuth, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const existing = await client.query(
+      `SELECT b.*, r.fare_fils AS effective_fare_fils
+       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id
+       WHERE b.id = $1 FOR UPDATE OF b`, [req.params.id]
+    );
+    if (!existing.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, error: "BUS_NOT_FOUND" });
+    }
+
+    const current = existing.rows[0];
+    const deviceId = requiredString(req.body?.device_id ?? current.device_id, "device_id");
+    const busNumber = requiredString(req.body?.bus_number ?? req.body?.bus_code ?? current.bus_code, "bus_number");
+    const changed = deviceId !== current.device_id || busNumber !== current.bus_code;
+
+    if (deviceId !== current.device_id) {
+      await client.query(
+        `INSERT INTO devices (device_id, bus_no)
+         SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM devices WHERE device_id = $1)`,
+        [deviceId, busNumber]
+      );
+      const owner = await client.query("SELECT id FROM buses WHERE device_id = $1 AND id <> $2", [deviceId, current.id]);
+      if (owner.rowCount) {
+        const err = new Error("device_id already exists"); err.statusCode = 409; throw err;
+      }
+    }
+
+    const updated = await client.query(
+      `UPDATE buses SET bus_code = $2, device_id = $3,
+         route_config_version = route_config_version + CASE WHEN $4 THEN 1 ELSE 0 END,
+         updated_at = CASE WHEN $4 THEN now() ELSE updated_at END
+       WHERE id = $1 RETURNING *`,
+      [current.id, busNumber, deviceId, changed]
+    );
+    await client.query("UPDATE devices SET bus_no = $2 WHERE device_id = $1", [deviceId, busNumber]);
+
+    if (changed) {
+      await client.query(
+        `INSERT INTO route_change_logs
+          (bus_id, old_route_id, new_route_id, old_fare_fils, new_fare_fils, old_device_id, new_device_id,
+           old_bus_number, new_bus_number, changed_by)
+         VALUES ($1,$2,$2,$3,$3,$4,$5,$6,$7,$8)`,
+        [current.id, current.active_route_id, current.effective_fare_fils, current.device_id, deviceId,
+          current.bus_code, busNumber, req.user?.username || null]
+      );
+    }
+    await client.query("COMMIT");
+    const result = await pool.query(
+      `SELECT b.*, b.bus_code AS bus_number, r.route_code, r.route_name, r.fare_fils,
+              r.is_active AS route_is_active
+       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id WHERE b.id = $1`,
+      [current.id]
+    );
+    res.json({ success: true, data: busResponse(result.rows[0]) });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  } finally { client.release(); }
 });
 
 router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) => {
@@ -489,13 +622,17 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
     }
 
     const nextRoute = await client.query(
-      "SELECT id, fare_fils FROM routes WHERE id = $1",
+      "SELECT id, fare_fils, is_active FROM routes WHERE id = $1",
       [newRouteId]
     );
 
     if (nextRoute.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    }
+    if (!nextRoute.rows[0].is_active) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ success: false, error: "ROUTE_INACTIVE" });
     }
 
     const current = bus.rows[0];
@@ -513,7 +650,7 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
         [req.params.id]
       );
       await client.query("COMMIT");
-      return res.json({ success: true, data: unchanged.rows[0] });
+      return res.json({ success: true, data: busResponse(unchanged.rows[0]) });
     }
 
     const updated = await client.query(
@@ -560,7 +697,7 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
       [updated.rows[0].id]
     );
 
-    res.json({ success: true, data: route.rows[0] });
+    res.json({ success: true, data: busResponse(route.rows[0]) });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     next(err);
@@ -575,6 +712,7 @@ router.get("/api/devices/:deviceId/active-route", requireApiKey, async (req, res
       `
         SELECT
           b.id AS bus_id,
+          b.bus_code AS bus_number,
           b.device_id,
           b.active_route_id,
           b.route_config_version,
@@ -582,7 +720,8 @@ router.get("/api/devices/:deviceId/active-route", requireApiKey, async (req, res
           r.id AS route_id,
           r.route_code,
           r.route_name,
-          r.fare_fils
+          r.fare_fils,
+          r.is_active AS route_is_active
         FROM buses b
         LEFT JOIN routes r ON r.id = b.active_route_id
         WHERE b.device_id = $1
@@ -598,16 +737,21 @@ router.get("/api/devices/:deviceId/active-route", requireApiKey, async (req, res
     if (!row.active_route_id || !row.route_id) {
       return res.status(404).json({ success: false, error: "NO_ACTIVE_ROUTE" });
     }
+    if (!row.route_is_active) {
+      return res.status(409).json({ success: false, error: "ROUTE_INACTIVE" });
+    }
 
     res.json({
       success: true,
       device_id: row.device_id,
       bus_id: row.bus_id,
+      bus_number: row.bus_number,
       version: row.route_config_version,
       route_id: row.route_id,
       route_code: row.route_code,
       route_name: row.route_name,
       fare_fils: row.fare_fils,
+      fare_kwd: formatFareKwd(row.fare_fils),
       updated_at: row.updated_at
     });
   } catch (err) {
