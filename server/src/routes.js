@@ -414,7 +414,13 @@ router.put("/api/routes/:id", requireAuth, async (req, res, next) => {
       [req.params.id, routeCode, routeName, fareFils, isActive]
     );
 
-    if (Number(existing.rows[0].fare_fils) !== fareFils) {
+    const assignedDeviceConfigChanged =
+      existing.rows[0].route_code !== routeCode ||
+      existing.rows[0].route_name !== routeName ||
+      Number(existing.rows[0].fare_fils) !== fareFils ||
+      existing.rows[0].is_active !== isActive;
+
+    if (assignedDeviceConfigChanged) {
       await client.query(
         `INSERT INTO route_change_logs
           (bus_id, old_route_id, new_route_id, old_fare_fils, new_fare_fils,
