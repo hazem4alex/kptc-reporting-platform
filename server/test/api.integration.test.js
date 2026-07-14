@@ -231,6 +231,33 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     assert.equal(duplicateWithNewLocation.json.duplicates, 1);
   });
 
+  await t.test("bulk transaction upload ignores records before July 2026", async () => {
+    const oldRecordUid = `old-before-cutoff-${suffix}`;
+    const upload = await call("/api/transactions/bulk", {
+      method: "POST",
+      auth: false,
+      apiKey: "integration-api-key",
+      body: {
+        device_id: deviceId,
+        source_file: "old-record-test",
+        transactions: [
+          {
+            record_uid: oldRecordUid,
+            amount_raw: 250,
+            amount_display_kwd: "0.250",
+            transaction_datetime_raw: "20260630235959"
+          }
+        ]
+      }
+    });
+    assert.equal(upload.response.status, 201);
+    assert.equal(upload.json.accepted, 0);
+    assert.equal(upload.json.ignored_before_cutoff, 1);
+
+    const stored = await pool.query("SELECT 1 FROM transactions WHERE record_uid = $1", [oldRecordUid]);
+    assert.equal(stored.rowCount, 0);
+  });
+
   await t.test("transaction report includes current bus and route and filters by them", async () => {
     const result = await call(`/api/reports/transactions?limit=100&offset=0&bus_number=${encodeURIComponent(busNumber)}&route=${encodeURIComponent(`X${suffix}`)}&driver=${encodeURIComponent(testDriverId)}`, { auth: false });
     assert.equal(result.response.status, 200);

@@ -10,6 +10,34 @@ const configuredDeviceTimeOffset = Number(process.env.DEVICE_TIME_OFFSET_HOURS ?
 const deviceTimeOffsetHours = Number.isFinite(configuredDeviceTimeOffset)
   ? configuredDeviceTimeOffset
   : -5;
+const operationalDataCutoffDate = "2026-07-01";
+const kuwaitDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kuwait",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+function dateOnlyInKuwait(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const parts = Object.fromEntries(
+    kuwaitDateFormatter.formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function transactionPayloadKuwaitDate(tx = {}, txTime = null) {
+  const fromRaw = parseRawWithOffset(tx.transaction_datetime_raw, deviceTimeOffsetHours);
+  if (fromRaw) return fromRaw.slice(0, 10);
+
+  const parsedTime = txTime || parseDateTime(tx.transaction_datetime);
+  return dateOnlyInKuwait(parsedTime);
+}
+
+function isBeforeOperationalDataCutoff(tx = {}, txTime = null) {
+  const txDate = transactionPayloadKuwaitDate(tx, txTime);
+  return Boolean(txDate && txDate < operationalDataCutoffDate);
+}
 
 function parseNonNegativeInteger(value, fieldName) {
   const number = Number(value);
@@ -678,11 +706,16 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
     );
 
     let accepted = 0;
+    let skippedBeforeCutoff = 0;
 
     for (const tx of transactions) {
       const recordUid = requiredString(tx.record_uid, "transactions[].record_uid");
       const cardType = tx.card_type == null ? null : String(tx.card_type).trim() || null;
       const txTime = parseDateTime(tx.transaction_datetime);
+      if (isBeforeOperationalDataCutoff(tx, txTime)) {
+        skippedBeforeCutoff += 1;
+        continue;
+      }
       const scanLocation = transactionLocation(batchLocation, tx);
       if (cardType) {
         await client.query(
@@ -767,7 +800,7 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
     }
 
     const received = transactions.length;
-    const duplicates = received - accepted;
+    const duplicates = Math.max(0, received - accepted - skippedBeforeCutoff);
 
     await client.query(
       `
@@ -786,7 +819,11 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
         accepted,
         duplicates,
         received,
-        body
+        {
+          ...body,
+          ignored_before_cutoff_count: skippedBeforeCutoff,
+          transaction_cutoff_date: operationalDataCutoffDate
+        }
       ]
     );
 
@@ -796,7 +833,9 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
       success: true,
       accepted,
       duplicates,
-      received
+      received,
+      ignored_before_cutoff: skippedBeforeCutoff,
+      transaction_cutoff_date: operationalDataCutoffDate
     });
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

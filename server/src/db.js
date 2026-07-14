@@ -10,6 +10,12 @@ export const pool = new Pool({
     : undefined
 });
 
+const operationalDataCutoffDate = "2026-07-01";
+const configuredDeviceTimeOffset = Number(process.env.DEVICE_TIME_OFFSET_HOURS ?? -5);
+const deviceTimeOffsetHours = Number.isFinite(configuredDeviceTimeOffset)
+  ? configuredDeviceTimeOffset
+  : -5;
+
 export async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS devices (
@@ -235,8 +241,47 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_driver_cards_driver_id ON driver_cards(driver_id);
   `);
 
+  await purgePreCutoffOperationalData();
   await seedAdminUser();
   await seedRoutesAndBuses();
+}
+
+async function purgePreCutoffOperationalData() {
+  await pool.query(
+    `
+      DELETE FROM transactions
+      WHERE COALESCE(
+        CASE
+          WHEN transaction_datetime_raw ~ '^\\d{14}$' THEN
+            (
+              make_timestamp(
+                substring(transaction_datetime_raw from 1 for 4)::int,
+                substring(transaction_datetime_raw from 5 for 2)::int,
+                substring(transaction_datetime_raw from 7 for 2)::int,
+                substring(transaction_datetime_raw from 9 for 2)::int,
+                substring(transaction_datetime_raw from 11 for 2)::int,
+                substring(transaction_datetime_raw from 13 for 2)::int
+              ) + ($2::int * interval '1 hour')
+            )::date
+          ELSE NULL
+        END,
+        (transaction_datetime AT TIME ZONE 'Asia/Kuwait')::date,
+        (received_at AT TIME ZONE 'Asia/Kuwait')::date
+      ) < $1::date
+    `,
+    [operationalDataCutoffDate, deviceTimeOffsetHours]
+  );
+
+  await pool.query(
+    `
+      DELETE FROM bus_locations
+      WHERE COALESCE(
+        (location_time AT TIME ZONE 'Asia/Kuwait')::date,
+        (received_at AT TIME ZONE 'Asia/Kuwait')::date
+      ) < $1::date
+    `,
+    [operationalDataCutoffDate]
+  );
 }
 
 async function seedAdminUser() {
