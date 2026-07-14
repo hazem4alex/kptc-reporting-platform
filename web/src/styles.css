@@ -941,7 +941,7 @@ h2 {
 }
 
 .transactions-page .filter-panel {
-  grid-template-columns: minmax(220px, 1.4fr) repeat(10, minmax(112px, 1fr));
+  grid-template-columns: minmax(220px, 1.4fr) repeat(11, minmax(112px, 1fr));
 }
 
 /* 18. Segmented control ------------------------------------- */
@@ -1057,6 +1057,30 @@ select:focus {
   background: rgba(255, 53, 85, 0.08);
   border-color: rgba(255, 53, 85, 0.28);
   color: var(--brand-red);
+}
+
+.status-pill.location-method.gps {
+  background: rgba(0, 204, 106, 0.08);
+  border-color: rgba(0, 204, 106, 0.32);
+  color: var(--brand-green);
+}
+
+.status-pill.location-method.approximate {
+  background: rgba(255, 184, 0, 0.1);
+  border-color: rgba(255, 184, 0, 0.34);
+  color: #e2a500;
+}
+
+.status-pill.location-method.other {
+  background: rgba(0, 229, 200, 0.08);
+  border-color: rgba(0, 229, 200, 0.24);
+  color: var(--accent);
+}
+
+.status-pill.location-method.unavailable {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: var(--muted);
 }
 
 /* 20. KPI cards (Bootstrap row/col handles the grid) --------- */
@@ -1371,11 +1395,11 @@ table {
 }
 
 .transactions-page table {
-  min-width: 1720px;
+  min-width: 2040px;
 }
 
 .driver-events-page table {
-  min-width: 1220px;
+  min-width: 1680px;
 }
 
 th,
@@ -1400,6 +1424,42 @@ td {
   font-family: 'DM Sans', sans-serif;
   font-size: 11px;
   line-height: 1.45;
+}
+
+.scan-location-cell,
+.location-method-cell,
+.nearest-station-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.scan-location-cell a,
+.transaction-summary a {
+  color: var(--accent);
+  font-family: 'DM Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.scan-location-cell a:hover,
+.transaction-summary a:hover {
+  text-decoration: underline;
+}
+
+.scan-location-cell small,
+.location-method-cell small,
+.nearest-station-cell small,
+.muted-value {
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+}
+
+.nearest-station-cell strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 tbody tr:hover td {

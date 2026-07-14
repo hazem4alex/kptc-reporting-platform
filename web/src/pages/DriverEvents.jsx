@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 import { Table } from "../components/Table.jsx";
 import { count, dateTime } from "../format.js";
+import {
+  buildLatestLocationsByDevice,
+  locationDetails,
+  locationMethodLabelFromDetails,
+  nearestStationText,
+  NearestStationCell,
+  ScanLocationCell,
+  LocationMethodCell
+} from "../locationDisplay.jsx";
 
 function includes(value, query) {
   return String(value || "").toLowerCase().includes(query);
@@ -23,12 +32,13 @@ function driverLabel(row) {
   return name || card || "-";
 }
 
-export function DriverEvents({ rows = [], t }) {
+export function DriverEvents({ rows = [], locations = [], stations = [], t }) {
   const [query, setQuery] = useState("");
   const [eventType, setEventType] = useState("all");
   const [driver, setDriver] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const latestLocationsByDevice = useMemo(() => buildLatestLocationsByDevice(locations), [locations]);
 
   const drivers = useMemo(() => {
     const options = new Map();
@@ -44,6 +54,7 @@ export function DriverEvents({ rows = [], t }) {
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return rows.filter((row) => {
+      const details = locationDetails(row, latestLocationsByDevice);
       if (eventType !== "all" && row.event_type !== eventType) return false;
       if (driver !== "all" && driverKey(row) !== driver) return false;
       const date = eventDate(row);
@@ -61,10 +72,16 @@ export function DriverEvents({ rows = [], t }) {
         row.bus_number,
         row.route_no,
         row.route_name,
+        details?.lat,
+        details?.lng,
+        details?.source,
+        details?.accuracy,
+        locationMethodLabelFromDetails(details, t),
+        nearestStationText(details, stations, t),
         row.record_uid
       ].some((value) => includes(value, normalizedQuery));
     });
-  }, [driver, eventType, from, query, rows, to]);
+  }, [driver, eventType, from, latestLocationsByDevice, query, rows, stations, t, to]);
 
   const loginCount = filtered.filter((row) => row.event_type === "login").length;
   const logoutCount = filtered.filter((row) => row.event_type === "logout").length;
@@ -148,6 +165,9 @@ export function DriverEvents({ rows = [], t }) {
             { key: "bus_number", label: t("busNumber"), render: (row) => row.bus_number || "-" },
             { key: "device_id", label: t("deviceId") },
             { key: "route_name", label: t("routeName"), render: (row) => row.route_name || row.route_no || "-" },
+            { key: "scan_location", label: t("latestLocation"), render: (row) => <ScanLocationCell details={locationDetails(row, latestLocationsByDevice)} t={t} /> },
+            { key: "scan_location_method", label: t("locationMethod"), render: (row) => <LocationMethodCell details={locationDetails(row, latestLocationsByDevice)} t={t} /> },
+            { key: "nearest_station", label: t("nearestStation"), render: (row) => <NearestStationCell details={locationDetails(row, latestLocationsByDevice)} stations={stations} t={t} /> },
             { key: "record_type", label: t("recordType") }
           ]}
         />

@@ -142,13 +142,13 @@ function Icon({ name }) {
 const nav = [
   { id: "overview",     label: "overview"     },
   { id: "transactions", label: "transactions" },
-  { id: "routes",       label: "routes"       },
   { id: "stations",     label: "stations"     },
+  { id: "routes",       label: "routes"       },
   { id: "buses",        label: "buses"        },
   { id: "drivers",      label: "drivers"      },
-  { id: "card-types",   label: "cardTypes"    },
   { id: "driver-events", label: "driverLoginLogout" },
   { id: "live-map",     label: "liveMap"      },
+  { id: "card-types",   label: "cardTypes"    },
   { id: "users",        label: "users"        }
 ];
 
@@ -277,7 +277,7 @@ export default function App() {
   const page = useMemo(() => {
     if (!data) return null;
     const isAdmin = session?.user?.role === "admin";
-    if (active === "transactions") return <Transactions rows={data.transactions} t={t} />;
+    if (active === "transactions") return <Transactions rows={data.transactions} locations={data.locations} stations={data.stations} t={t} />;
     if (active === "routes") {
       return (
         <RoutesManagement
@@ -336,7 +336,7 @@ export default function App() {
       );
     }
     if (active === "card-types") return <CardTypes rows={data.cardTypes} t={t} onUpdateCardType={updateCardType} />;
-    if (active === "driver-events") return <DriverEvents rows={data.driverEvents} t={t} />;
+    if (active === "driver-events") return <DriverEvents rows={data.driverEvents} locations={data.locations} stations={data.stations} t={t} />;
     if (active === "live-map") return <LiveMap rows={data.locations} t={t} />;
     if (active === "users") return <Users rows={users} t={t} onCreateUser={createUser} />;
     return <Overview data={data} t={t} />;

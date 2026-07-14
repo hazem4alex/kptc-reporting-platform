@@ -144,9 +144,20 @@ export async function initDb() {
       sub_type text,
       crc text,
       source_file text,
+      scan_lat numeric(10,7),
+      scan_lng numeric(10,7),
+      scan_location_source text,
+      scan_location_accuracy text,
+      scan_location_time timestamptz,
       payload jsonb,
       received_at timestamptz DEFAULT now()
     );
+
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS scan_lat numeric(10,7) NULL;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS scan_lng numeric(10,7) NULL;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS scan_location_source text NULL;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS scan_location_accuracy text NULL;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS scan_location_time timestamptz NULL;
 
     INSERT INTO card_type_definitions (card_type, is_driver_card)
     VALUES ('0500', true)
@@ -208,6 +219,9 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_transactions_card_type ON transactions(card_type);
     CREATE INDEX IF NOT EXISTS idx_transactions_driver_events
       ON transactions(card_type, record_type, transaction_datetime DESC);
+    CREATE INDEX IF NOT EXISTS idx_transactions_scan_location
+      ON transactions(device_id, scan_location_time DESC)
+      WHERE scan_lat IS NOT NULL AND scan_lng IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_transactions_received_at ON transactions(received_at DESC);
     CREATE INDEX IF NOT EXISTS idx_bus_locations_device_time ON bus_locations(device_id, location_time DESC, received_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sync_batches_device_created ON sync_batches(device_id, created_at DESC);

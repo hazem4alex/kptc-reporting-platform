@@ -192,6 +192,13 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     const payload = {
       device_id: deviceId,
       source_file: "integration-test",
+      location: {
+        lat: 29.3759001,
+        lng: 47.9774002,
+        source: "integration-gps",
+        accuracy: "gps",
+        location_time: "2026-07-12T08:00:00Z"
+      },
       transactions: [
         {
           record_uid: financialRecordUid,
@@ -219,6 +226,10 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     assert.equal(row.current_driver_id, testDriverId);
     assert.equal(row.current_driver_name_en, "Integration Driver");
     assert.equal(row.current_driver_civil_id, driverCivilId);
+    assert.equal(Number(row.scan_lat), 29.3759001);
+    assert.equal(Number(row.scan_lng), 47.9774002);
+    assert.equal(row.scan_location_source, "integration-gps");
+    assert.equal(row.scan_location_accuracy, "gps");
     assert.equal(result.json.summary.amount_total_kwd, 0.25);
   });
 
@@ -226,6 +237,13 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     const payload = {
       device_id: deviceId,
       source_file: "driver-events-test",
+      location: {
+        lat: 29.2761001,
+        lng: 47.9589002,
+        source: "integration-ip-geo",
+        accuracy: "approximate",
+        location_time: "2026-07-12T09:00:00Z"
+      },
       transactions: [
         {
           record_uid: driverSignOutUid,
@@ -252,5 +270,9 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     const byUid = new Map(events.json.data.map((row) => [row.record_uid, row]));
     assert.equal(byUid.get(driverSignInUid)?.event_type, "login");
     assert.equal(byUid.get(driverSignOutUid)?.event_type, "logout");
+    assert.equal(Number(byUid.get(driverSignOutUid)?.scan_lat), 29.2761001);
+    assert.equal(Number(byUid.get(driverSignOutUid)?.scan_lng), 47.9589002);
+    assert.equal(byUid.get(driverSignOutUid)?.scan_location_source, "integration-ip-geo");
+    assert.equal(byUid.get(driverSignOutUid)?.scan_location_accuracy, "approximate");
   });
 });

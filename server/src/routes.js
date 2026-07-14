@@ -60,6 +60,42 @@ function busResponse(row) {
   };
 }
 
+function normalizeLocation(input = {}) {
+  if (!input || typeof input !== "object") {
+    return { lat: null, lng: null, source: null, accuracy: null, locationTime: null, speed: null, bearing: null };
+  }
+
+  return {
+    lat: parseNumeric(input.lat ?? input.latitude),
+    lng: parseNumeric(input.lng ?? input.lon ?? input.longitude),
+    source: input.source == null ? null : String(input.source),
+    accuracy: input.accuracy == null ? null : String(input.accuracy),
+    locationTime: parseDateTime(input.location_time ?? input.gps_time ?? input.time ?? input.timestamp),
+    speed: parseNumeric(input.speed),
+    bearing: parseNumeric(input.bearing)
+  };
+}
+
+function transactionLocation(batchLocation, tx = {}) {
+  const txLocation = normalizeLocation(tx.location);
+  const explicitTxLocationTime = parseDateTime(tx.location_time);
+  const transactionTime = parseDateTime(tx.transaction_datetime);
+
+  return {
+    lat: txLocation.lat ?? batchLocation.lat,
+    lng: txLocation.lng ?? batchLocation.lng,
+    source: txLocation.source ?? batchLocation.source,
+    accuracy: txLocation.accuracy ?? batchLocation.accuracy,
+    locationTime:
+      txLocation.locationTime ??
+      explicitTxLocationTime ??
+      batchLocation.locationTime ??
+      transactionTime,
+    speed: txLocation.speed ?? batchLocation.speed,
+    bearing: txLocation.bearing ?? batchLocation.bearing
+  };
+}
+
 const rawWithDeviceOffsetSql = `
   CASE
     WHEN transaction_datetime_raw ~ '^\\d{14}$' THEN
@@ -610,6 +646,15 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
     const deviceId = requiredString(body.device_id, "device_id");
     const routeExtra = body.route_extra === undefined ? null : JSON.stringify(body.route_extra);
     const transactions = Array.isArray(body.transactions) ? body.transactions : [];
+    const rawBatchLocation = body.location && typeof body.location === "object" ? body.location : {};
+    const batchLocation = normalizeLocation({
+      ...rawBatchLocation,
+      location_time: rawBatchLocation.location_time ?? body.location_time,
+      source: rawBatchLocation.source ?? body.location_source,
+      accuracy: rawBatchLocation.accuracy ?? body.location_accuracy,
+      speed: rawBatchLocation.speed ?? body.speed,
+      bearing: rawBatchLocation.bearing ?? body.bearing
+    });
 
     await client.query("BEGIN");
 
@@ -637,6 +682,8 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
     for (const tx of transactions) {
       const recordUid = requiredString(tx.record_uid, "transactions[].record_uid");
       const cardType = tx.card_type == null ? null : String(tx.card_type).trim() || null;
+      const txTime = parseDateTime(tx.transaction_datetime);
+      const scanLocation = transactionLocation(batchLocation, tx);
       if (cardType) {
         await client.query(
           `
@@ -653,13 +700,15 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
             record_uid, device_id, record_index, sequence_no, card_no, card_type,
             card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
             amount_display_kwd, amount_copy_raw, transaction_datetime,
-            transaction_datetime_raw, record_type, sub_type, crc, source_file, payload
+            transaction_datetime_raw, record_type, sub_type, crc, source_file,
+            scan_lat, scan_lng, scan_location_source, scan_location_accuracy, scan_location_time, payload
           )
           VALUES (
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9, $10, $11,
             $12, $13, $14,
-            $15, $16, $17, $18, $19, $20
+            $15, $16, $17, $18, $19,
+            $20, $21, $22, $23, $24, $25
           )
           ON CONFLICT (record_uid) DO NOTHING
         `,
@@ -677,16 +726,42 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
           parseNumeric(tx.amount_raw),
           parseNumeric(tx.amount_display_kwd),
           parseNumeric(tx.amount_copy_raw),
-          parseDateTime(tx.transaction_datetime),
+          txTime,
           tx.transaction_datetime_raw ?? null,
           tx.record_type ?? null,
           tx.sub_type ?? null,
           tx.crc ?? null,
           body.source_file ?? null,
+          scanLocation.lat,
+          scanLocation.lng,
+          scanLocation.source,
+          scanLocation.accuracy,
+          scanLocation.locationTime,
           tx
         ]
       );
       accepted += result.rowCount;
+
+      if (result.rowCount > 0 && scanLocation.lat !== null && scanLocation.lng !== null) {
+        await client.query(
+          `
+            INSERT INTO bus_locations (
+              device_id, bus_no, lat, lng, speed, bearing, source, location_time
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `,
+          [
+            deviceId,
+            body.bus_no ?? null,
+            scanLocation.lat,
+            scanLocation.lng,
+            scanLocation.speed,
+            scanLocation.bearing,
+            scanLocation.source ?? "transaction_scan",
+            scanLocation.locationTime ?? txTime
+          ]
+        );
+      }
     }
 
     const received = transactions.length;
@@ -1455,6 +1530,7 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             t.card_expiry, t.counter, t.balance_raw, t.balance_display_kwd, t.amount_raw,
             t.amount_display_kwd, t.amount_copy_raw, t.transaction_datetime,
             t.transaction_datetime_raw, t.record_type, t.sub_type, t.crc, t.source_file, t.received_at,
+            t.scan_lat, t.scan_lng, t.scan_location_source, t.scan_location_accuracy, t.scan_location_time,
             COALESCE(b.bus_code, d.bus_no) AS bus_number,
             b.active_route_id AS current_route_id,
             COALESCE(r.route_code, d.route_no) AS current_route_code,
@@ -1512,6 +1588,7 @@ router.get("/api/reports/transactions", async (req, res, next) => {
           bus_number, current_route_id, current_route_code, current_route_name,
           current_driver_card_no, current_driver_id, current_driver_name_en, current_driver_name_ar,
           current_driver_civil_id, current_driver_phone_number,
+          scan_lat, scan_lng, scan_location_source, scan_location_accuracy, scan_location_time,
           transaction_datetime_raw,
           to_char(transaction_datetime_kuwait_ts, 'YYYY-MM-DD HH24:MI:SS') AS transaction_datetime_kuwait,
           record_type, sub_type, crc, source_file, received_at
@@ -1696,6 +1773,11 @@ router.get("/api/reports/driver-events", async (req, res, next) => {
             t.sub_type,
             t.transaction_datetime,
             t.transaction_datetime_raw,
+            t.scan_lat,
+            t.scan_lng,
+            t.scan_location_source,
+            t.scan_location_accuracy,
+            t.scan_location_time,
             t.received_at,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions t
@@ -1729,6 +1811,11 @@ router.get("/api/reports/driver-events", async (req, res, next) => {
           n.sub_type,
           n.transaction_datetime,
           n.transaction_datetime_raw,
+          n.scan_lat,
+          n.scan_lng,
+          n.scan_location_source,
+          n.scan_location_accuracy,
+          n.scan_location_time,
           to_char(n.transaction_datetime_kuwait_ts, 'YYYY-MM-DD HH24:MI:SS') AS transaction_datetime_kuwait,
           n.received_at
         FROM normalized n

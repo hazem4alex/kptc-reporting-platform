@@ -1,6 +1,18 @@
 import { useMemo, useState } from "react";
 import { Table } from "../components/Table.jsx";
 import { count, dateTime, kwd } from "../format.js";
+import {
+  buildLatestLocationsByDevice,
+  formatLocationSummary,
+  locationDetails,
+  locationMethodKeyFromDetails,
+  locationMethodLabelFromDetails,
+  nearestStationText,
+  NearestStationCell,
+  scanLocationUrl,
+  ScanLocationCell,
+  LocationMethodCell
+} from "../locationDisplay.jsx";
 
 function transactionDate(row) {
   return String(row.transaction_datetime_kuwait || "").slice(0, 10);
@@ -57,7 +69,7 @@ function sumAmount(rows) {
   return rows.reduce((total, row) => total + Number(row.amount_corrected || 0), 0);
 }
 
-export function Transactions({ rows = [], t }) {
+export function Transactions({ rows = [], locations = [], stations = [], t }) {
   const [filters, setFilters] = useState({
     query: "",
     device: "all",
@@ -68,6 +80,7 @@ export function Transactions({ rows = [], t }) {
     from: "",
     to: "",
     minAmount: "",
+    locationMethod: "all",
     sort: "latest",
     groupBy: "none"
   });
@@ -116,6 +129,14 @@ export function Transactions({ rows = [], t }) {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [rows]);
   const cardTypes = useMemo(() => Array.from(new Set(rows.map((row) => row.card_type).filter(Boolean))).sort(), [rows]);
+  const latestLocationsByDevice = useMemo(() => buildLatestLocationsByDevice(locations), [locations]);
+  const locationMethodOptions = [
+    { value: "all", labelKey: "allLocationMethods" },
+    { value: "gps", labelKey: "gpsLocation" },
+    { value: "approximate", labelKey: "approximateLocation" },
+    { value: "other", labelKey: "otherLocationMethod" },
+    { value: "unavailable", labelKey: "locationUnavailableShort" }
+  ];
 
   const filteredRows = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
@@ -123,6 +144,7 @@ export function Transactions({ rows = [], t }) {
 
     return rows
       .filter((row) => {
+        const details = locationDetails(row, latestLocationsByDevice);
         if (query && ![
           row.device_id,
           row.bus_number,
@@ -132,6 +154,12 @@ export function Transactions({ rows = [], t }) {
           row.current_driver_name_en,
           row.current_driver_name_ar,
           row.current_driver_civil_id,
+          details?.lat,
+          details?.lng,
+          details?.source,
+          details?.accuracy,
+          locationMethodLabelFromDetails(details, t),
+          nearestStationText(details, stations, t),
           row.record_uid,
           row.card_no,
           row.card_type,
@@ -144,6 +172,7 @@ export function Transactions({ rows = [], t }) {
         if (filters.route !== "all" && routeKey(row) !== filters.route) return false;
         if (filters.driver !== "all" && driverKey(row) !== filters.driver) return false;
         if (filters.cardType !== "all" && row.card_type !== filters.cardType) return false;
+        if (filters.locationMethod !== "all" && locationMethodKeyFromDetails(details) !== filters.locationMethod) return false;
         if (filters.from && transactionDate(row) < filters.from) return false;
         if (filters.to && transactionDate(row) > filters.to) return false;
         if (filters.minAmount && Number(row.amount_display_kwd || 0) < minAmount) return false;
@@ -159,7 +188,7 @@ export function Transactions({ rows = [], t }) {
         if (filters.sort === "driver") return driverLabel(a).localeCompare(driverLabel(b));
         return compareDate(a, b, "received_at") || Number(b.id || 0) - Number(a.id || 0);
       });
-  }, [filters, rows]);
+  }, [filters, latestLocationsByDevice, rows, stations, t]);
 
   const grouped = useMemo(() => {
     if (filters.groupBy === "none") return [{ title: t("allTransactions"), rows: filteredRows }];
@@ -170,6 +199,12 @@ export function Transactions({ rows = [], t }) {
   }, [filteredRows, filters.groupBy, t]);
 
   const totalAmount = sumAmount(filteredRows);
+  const latestLocationDetails = useMemo(() => {
+    return filteredRows
+      .map((row) => locationDetails(row, latestLocationsByDevice))
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0))[0] || null;
+  }, [filteredRows, latestLocationsByDevice]);
 
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -185,6 +220,16 @@ export function Transactions({ rows = [], t }) {
         <div className="transaction-summary">
           <span>{count(filteredRows.length)} {t("rows")}</span>
           <strong>{t("amountTotal")}: {kwd(totalAmount)}</strong>
+          <span>
+            {t("latestLocation")}:{" "}
+            {latestLocationDetails ? (
+              <a href={scanLocationUrl(latestLocationDetails)} target="_blank" rel="noreferrer">
+                {formatLocationSummary(latestLocationDetails, t)}
+              </a>
+            ) : (
+              t("locationUnavailableShort")
+            )}
+          </span>
         </div>
       </div>
 
@@ -231,6 +276,14 @@ export function Transactions({ rows = [], t }) {
           <select value={filters.cardType} onChange={(event) => updateFilter("cardType", event.target.value)}>
             <option value="all">{t("allTypes")}</option>
             {cardTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>{t("locationMethod")}</span>
+          <select value={filters.locationMethod} onChange={(event) => updateFilter("locationMethod", event.target.value)}>
+            {locationMethodOptions.map((option) => (
+              <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+            ))}
           </select>
         </label>
         <label className="field">
@@ -286,6 +339,9 @@ export function Transactions({ rows = [], t }) {
                 { key: "bus_number", label: t("busNumber"), render: (row) => row.bus_number || "-" },
                 { key: "current_route", label: t("currentRoute"), render: (row) => routeLabel(row) },
                 { key: "current_driver_card_no", label: t("currentDriver"), render: driverLabel },
+                { key: "scan_location", label: t("latestLocation"), render: (row) => <ScanLocationCell details={locationDetails(row, latestLocationsByDevice)} t={t} /> },
+                { key: "scan_location_method", label: t("locationMethod"), render: (row) => <LocationMethodCell details={locationDetails(row, latestLocationsByDevice)} t={t} /> },
+                { key: "nearest_station", label: t("nearestStation"), render: (row) => <NearestStationCell details={locationDetails(row, latestLocationsByDevice)} stations={stations} t={t} /> },
                 { key: "record_uid", label: t("recordUid") },
                 { key: "card_no", label: t("card") },
                 { key: "card_type", label: t("type") },
