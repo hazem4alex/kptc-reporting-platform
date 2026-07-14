@@ -14,8 +14,8 @@ const secondRouteId = `RX${suffix}`;
 const deviceId = `9001${suffix}`;
 const busNumber = `9002${suffix}`;
 const driverCardType = `D${suffix}`;
-const driverLoginUid = `driver-login-${suffix}`;
-const driverLogoutUid = `driver-logout-${suffix}`;
+const driverSignInUid = `driver-sign-in-${suffix}`;
+const driverSignOutUid = `driver-sign-out-${suffix}`;
 
 async function call(path, { method = "GET", body, auth = true, apiKey } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -117,19 +117,19 @@ suite("route/device configuration flow and regression coverage", async (t) => {
       source_file: "driver-events-test",
       transactions: [
         {
-          record_uid: driverLoginUid,
+          record_uid: driverSignInUid,
           card_no: "DRIVER001",
           card_type: driverCardType,
-          record_type: "44",
+          record_type: "43",
           amount_raw: 0,
           amount_display_kwd: "0.000",
           transaction_datetime_raw: "20260712070000"
         },
         {
-          record_uid: driverLogoutUid,
+          record_uid: driverSignOutUid,
           card_no: "DRIVER001",
           card_type: driverCardType,
-          record_type: "43",
+          record_type: "44",
           amount_raw: 0,
           amount_display_kwd: "0.000",
           transaction_datetime_raw: "20260712090000"
@@ -143,12 +143,12 @@ suite("route/device configuration flow and regression coverage", async (t) => {
 
     const financial = await call(`/api/reports/transactions?limit=100&offset=0&device_id=${deviceId}`, { auth: false });
     assert.equal(financial.response.status, 200);
-    assert.equal(financial.json.data.some((row) => row.record_uid === driverLoginUid || row.record_uid === driverLogoutUid), false);
+    assert.equal(financial.json.data.some((row) => row.record_uid === driverSignInUid || row.record_uid === driverSignOutUid), false);
 
     const events = await call("/api/reports/driver-events?limit=1000", { auth: false });
     assert.equal(events.response.status, 200);
     const byUid = new Map(events.json.data.map((row) => [row.record_uid, row]));
-    assert.equal(byUid.get(driverLoginUid)?.event_type, "login");
-    assert.equal(byUid.get(driverLogoutUid)?.event_type, "logout");
+    assert.equal(byUid.get(driverSignInUid)?.event_type, "login");
+    assert.equal(byUid.get(driverSignOutUid)?.event_type, "logout");
   });
 });

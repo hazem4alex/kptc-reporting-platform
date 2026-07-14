@@ -1056,8 +1056,8 @@ router.get("/api/reports/driver-events", async (req, res, next) => {
           n.card_no,
           n.card_type,
           CASE n.record_type
-            WHEN '44' THEN 'login'
-            WHEN '43' THEN 'logout'
+            WHEN '43' THEN 'login'
+            WHEN '44' THEN 'logout'
           END AS event_type,
           n.record_type,
           n.sub_type,
