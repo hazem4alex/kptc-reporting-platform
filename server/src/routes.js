@@ -937,6 +937,7 @@ router.get("/api/reports/transactions", async (req, res, next) => {
       bus_number: busNumber
     } = req.query;
     const routeFilter = req.query.route ?? req.query.route_no ?? req.query.route_name;
+    const driverFilter = req.query.driver ?? req.query.driver_card_no;
 
     const rows = await pool.query(
       `
@@ -950,19 +951,41 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             b.active_route_id AS current_route_id,
             COALESCE(r.route_code, d.route_no) AS current_route_code,
             COALESCE(r.route_name, d.route_name) AS current_route_name,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.card_no ELSE NULL END AS current_driver_card_no,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions t
           LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
           LEFT JOIN devices d ON d.device_id = t.device_id
           LEFT JOIN buses b ON b.device_id = t.device_id
           LEFT JOIN routes r ON r.id = b.active_route_id
+          LEFT JOIN LATERAL (
+            SELECT dt.card_no, dt.record_type
+            FROM transactions dt
+            INNER JOIN card_type_definitions dc
+              ON dc.card_type = dt.card_type AND dc.is_driver_card = true
+            WHERE dt.device_id = t.device_id
+              AND dt.record_type IN ('43', '44')
+              AND (
+                (
+                  t.transaction_datetime IS NOT NULL
+                  AND dt.transaction_datetime IS NOT NULL
+                  AND dt.transaction_datetime <= t.transaction_datetime
+                )
+                OR (
+                  (t.transaction_datetime IS NULL OR dt.transaction_datetime IS NULL)
+                  AND dt.id <= t.id
+                )
+              )
+            ORDER BY COALESCE(dt.transaction_datetime, dt.received_at) DESC, dt.id DESC
+            LIMIT 1
+          ) driver_event ON true
           WHERE NOT COALESCE(c.is_driver_card, false)
         )
         SELECT
           id, record_uid, device_id, record_index, sequence_no, card_no, card_type,
           card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
           amount_display_kwd, amount_copy_raw, transaction_datetime,
-          bus_number, current_route_id, current_route_code, current_route_name,
+          bus_number, current_route_id, current_route_code, current_route_name, current_driver_card_no,
           transaction_datetime_raw,
           to_char(transaction_datetime_kuwait_ts, 'YYYY-MM-DD HH24:MI:SS') AS transaction_datetime_kuwait,
           record_type, sub_type, crc, source_file, received_at
@@ -978,10 +1001,11 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             OR current_route_code = $6
             OR current_route_name = $6
           )
+          AND ($7::text IS NULL OR current_driver_card_no = $7)
         ORDER BY id DESC
-        LIMIT $7 OFFSET $8
+        LIMIT $8 OFFSET $9
       `,
-      [deviceId || null, cardNo || null, from || null, to || null, busNumber || null, routeFilter || null, limit, offset]
+      [deviceId || null, cardNo || null, from || null, to || null, busNumber || null, routeFilter || null, driverFilter || null, limit, offset]
     );
 
     const count = await pool.query(
@@ -995,12 +1019,34 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             b.active_route_id AS current_route_id,
             COALESCE(r.route_code, d.route_no) AS current_route_code,
             COALESCE(r.route_name, d.route_name) AS current_route_name,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.card_no ELSE NULL END AS current_driver_card_no,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions t
           LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
           LEFT JOIN devices d ON d.device_id = t.device_id
           LEFT JOIN buses b ON b.device_id = t.device_id
           LEFT JOIN routes r ON r.id = b.active_route_id
+          LEFT JOIN LATERAL (
+            SELECT dt.card_no, dt.record_type
+            FROM transactions dt
+            INNER JOIN card_type_definitions dc
+              ON dc.card_type = dt.card_type AND dc.is_driver_card = true
+            WHERE dt.device_id = t.device_id
+              AND dt.record_type IN ('43', '44')
+              AND (
+                (
+                  t.transaction_datetime IS NOT NULL
+                  AND dt.transaction_datetime IS NOT NULL
+                  AND dt.transaction_datetime <= t.transaction_datetime
+                )
+                OR (
+                  (t.transaction_datetime IS NULL OR dt.transaction_datetime IS NULL)
+                  AND dt.id <= t.id
+                )
+              )
+            ORDER BY COALESCE(dt.transaction_datetime, dt.received_at) DESC, dt.id DESC
+            LIMIT 1
+          ) driver_event ON true
           WHERE NOT COALESCE(c.is_driver_card, false)
         )
         SELECT
@@ -1027,8 +1073,9 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             OR current_route_code = $6
             OR current_route_name = $6
           )
+          AND ($7::text IS NULL OR current_driver_card_no = $7)
       `,
-      [deviceId || null, cardNo || null, from || null, to || null, busNumber || null, routeFilter || null]
+      [deviceId || null, cardNo || null, from || null, to || null, busNumber || null, routeFilter || null, driverFilter || null]
     );
 
     res.json({

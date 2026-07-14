@@ -98,26 +98,7 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     assert.equal(afterVersion.rows[0].route_config_version, before.rows[0].route_config_version + 1);
   });
 
-  await t.test("bulk transaction upload still accepts and deduplicates records", async () => {
-    const payload = { device_id: deviceId, source_file: "integration-test", transactions: [{ record_uid: financialRecordUid, amount_raw: 250, amount_display_kwd: "0.250" }] };
-    const first = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
-    const duplicate = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
-    assert.equal(first.response.status, 201); assert.equal(first.json.accepted, 1); assert.equal(duplicate.json.duplicates, 1);
-  });
-
-  await t.test("transaction report includes current bus and route and filters by them", async () => {
-    const result = await call(`/api/reports/transactions?limit=100&offset=0&bus_number=${encodeURIComponent(busNumber)}&route=${encodeURIComponent(`X${suffix}`)}`, { auth: false });
-    assert.equal(result.response.status, 200);
-    const row = result.json.data.find((item) => item.record_uid === financialRecordUid);
-    assert.ok(row);
-    assert.equal(row.bus_number, busNumber);
-    assert.equal(row.current_route_id, secondRouteId);
-    assert.equal(row.current_route_code, `X${suffix}`);
-    assert.equal(row.current_route_name, "Second Test Route");
-    assert.equal(result.json.summary.amount_total_kwd, 0.25);
-  });
-
-  await t.test("driver card types are excluded from financial transactions and exposed as driver events", async () => {
+  await t.test("registers a driver sign-in event before passenger transactions", async () => {
     const cardType = await call(`/api/card-types/${driverCardType}`, {
       method: "PUT",
       body: { is_driver_card: true }
@@ -127,7 +108,7 @@ suite("route/device configuration flow and regression coverage", async (t) => {
 
     const payload = {
       device_id: deviceId,
-      source_file: "driver-events-test",
+      source_file: "driver-sign-in-test",
       transactions: [
         {
           record_uid: driverSignInUid,
@@ -137,7 +118,51 @@ suite("route/device configuration flow and regression coverage", async (t) => {
           amount_raw: 0,
           amount_display_kwd: "0.000",
           transaction_datetime_raw: "20260712070000"
-        },
+        }
+      ]
+    };
+
+    const upload = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
+    assert.equal(upload.response.status, 201);
+    assert.equal(upload.json.accepted, 1);
+  });
+
+  await t.test("bulk transaction upload still accepts and deduplicates records", async () => {
+    const payload = {
+      device_id: deviceId,
+      source_file: "integration-test",
+      transactions: [
+        {
+          record_uid: financialRecordUid,
+          amount_raw: 250,
+          amount_display_kwd: "0.250",
+          transaction_datetime_raw: "20260712080000"
+        }
+      ]
+    };
+    const first = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
+    const duplicate = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
+    assert.equal(first.response.status, 201); assert.equal(first.json.accepted, 1); assert.equal(duplicate.json.duplicates, 1);
+  });
+
+  await t.test("transaction report includes current bus and route and filters by them", async () => {
+    const result = await call(`/api/reports/transactions?limit=100&offset=0&bus_number=${encodeURIComponent(busNumber)}&route=${encodeURIComponent(`X${suffix}`)}&driver=${encodeURIComponent("DRIVER001")}`, { auth: false });
+    assert.equal(result.response.status, 200);
+    const row = result.json.data.find((item) => item.record_uid === financialRecordUid);
+    assert.ok(row);
+    assert.equal(row.bus_number, busNumber);
+    assert.equal(row.current_route_id, secondRouteId);
+    assert.equal(row.current_route_code, `X${suffix}`);
+    assert.equal(row.current_route_name, "Second Test Route");
+    assert.equal(row.current_driver_card_no, "DRIVER001");
+    assert.equal(result.json.summary.amount_total_kwd, 0.25);
+  });
+
+  await t.test("driver card types are excluded from financial transactions and exposed as driver events", async () => {
+    const payload = {
+      device_id: deviceId,
+      source_file: "driver-events-test",
+      transactions: [
         {
           record_uid: driverSignOutUid,
           card_no: "DRIVER001",
@@ -152,7 +177,7 @@ suite("route/device configuration flow and regression coverage", async (t) => {
 
     const upload = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
     assert.equal(upload.response.status, 201);
-    assert.equal(upload.json.accepted, 2);
+    assert.equal(upload.json.accepted, 1);
 
     const financial = await call(`/api/reports/transactions?limit=100&offset=0&device_id=${deviceId}`, { auth: false });
     assert.equal(financial.response.status, 200);

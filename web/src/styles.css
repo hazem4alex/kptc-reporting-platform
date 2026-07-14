@@ -813,6 +813,10 @@ main {
   width: 100%;
 }
 
+.transactions-page {
+  max-width: none;
+}
+
 .page-header,
 .hero-dashboard {
   align-items: end;
@@ -932,6 +936,10 @@ h2 {
 
 .filter-panel.driver-event-filters {
   grid-template-columns: minmax(240px, 2fr) minmax(160px, 1fr);
+}
+
+.transactions-page .filter-panel {
+  grid-template-columns: minmax(220px, 1.4fr) repeat(10, minmax(112px, 1fr));
 }
 
 /* 18. Segmented control ------------------------------------- */
@@ -1358,6 +1366,10 @@ table {
   border-collapse: collapse;
   min-width: 840px;
   width: 100%;
+}
+
+.transactions-page table {
+  min-width: 1720px;
 }
 
 th,
