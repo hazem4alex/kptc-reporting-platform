@@ -14,9 +14,14 @@ const secondRouteId = `RX${suffix}`;
 const deviceId = `9001${suffix}`;
 const busNumber = `9002${suffix}`;
 const driverCardType = `D${suffix}`;
+const driverCardNo = `DRIVER${suffix}`;
+const driverCivilId = `CIVIL${suffix}`;
+const startStationId = `SSTART${suffix}`;
+const endStationId = `SEND${suffix}`;
 const driverSignInUid = `driver-sign-in-${suffix}`;
 const driverSignOutUid = `driver-sign-out-${suffix}`;
 const financialRecordUid = `integration-${suffix}`;
+let testDriverId;
 
 async function call(path, { method = "GET", body, auth = true, apiKey } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -50,9 +55,12 @@ after(async () => {
   await pool.query("DELETE FROM transactions WHERE device_id = $1", [deviceId]).catch(() => {});
   await pool.query("DELETE FROM sync_batches WHERE device_id = $1", [deviceId]).catch(() => {});
   await pool.query("DELETE FROM card_type_definitions WHERE card_type = $1", [driverCardType]).catch(() => {});
+  await pool.query("DELETE FROM driver_cards WHERE card_no = $1 OR driver_id = $2", [driverCardNo, testDriverId || ""]).catch(() => {});
+  await pool.query("DELETE FROM drivers WHERE civil_id = $1", [driverCivilId]).catch(() => {});
   await pool.query("DELETE FROM buses WHERE id = $1", [busNumber]).catch(() => {});
   await pool.query("DELETE FROM devices WHERE device_id = $1", [deviceId]).catch(() => {});
   await pool.query("DELETE FROM routes WHERE id IN ($1,$2)", [routeId, secondRouteId]).catch(() => {});
+  await pool.query("DELETE FROM stations WHERE id IN ($1,$2)", [startStationId, endStationId]).catch(() => {});
   await new Promise((resolve) => server.close(resolve)); await pool.end();
 });
 
@@ -61,9 +69,40 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     const result = await call("/api/routes", { auth: false }); assert.equal(result.response.status, 401);
   });
 
-  await t.test("creates a 250-fils route", async () => {
-    const result = await call("/api/routes", { method: "POST", body: { route_code: routeCode, route_name: "Murqab Test", fare_fils: 250, is_active: true } });
+  await t.test("creates route stations", async () => {
+    const start = await call("/api/stations", {
+      method: "POST",
+      body: { name_en: `Start ${suffix}`, name_ar: "بداية", latitude: "29.3759000", longitude: "47.9774000" }
+    });
+    assert.equal(start.response.status, 201);
+    assert.equal(start.json.data.name_en, `Start ${suffix}`);
+
+    const end = await call("/api/stations", {
+      method: "POST",
+      body: { name_en: `End ${suffix}`, name_ar: "نهاية", latitude: "29.3375000", longitude: "48.0763000" }
+    });
+    assert.equal(end.response.status, 201);
+    assert.equal(end.json.data.name_en, `End ${suffix}`);
+
+    await pool.query("UPDATE stations SET id = $1 WHERE id = $2", [startStationId, start.json.data.id]);
+    await pool.query("UPDATE stations SET id = $1 WHERE id = $2", [endStationId, end.json.data.id]);
+  });
+
+  await t.test("creates a 250-fils route with start and end stations", async () => {
+    const result = await call("/api/routes", {
+      method: "POST",
+      body: {
+        route_code: routeCode,
+        route_name: "Murqab Test",
+        fare_fils: 250,
+        start_station_id: startStationId,
+        end_station_id: endStationId,
+        is_active: true
+      }
+    });
     assert.equal(result.response.status, 201); assert.equal(result.json.data.fare_kwd, "0.250");
+    assert.equal(result.json.data.start_station_id, startStationId);
+    assert.equal(result.json.data.end_station_id, endStationId);
   });
 
   await t.test("registers a device and assigns its route", async () => {
@@ -75,6 +114,8 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     const result = await call(`/api/devices/${deviceId}/active-route`, { auth: false, apiKey: "integration-api-key" });
     assert.equal(result.response.status, 200); assert.equal(result.json.route_name, "Murqab Test");
     assert.equal(result.json.bus_number, busNumber); assert.equal(result.json.fare_fils, 250); assert.equal(result.json.fare_kwd, "0.250");
+    assert.equal(result.json.start_station_id, startStationId);
+    assert.equal(result.json.end_station_id, endStationId);
   });
 
   await t.test("rejects an invalid API key", async () => {
@@ -99,6 +140,26 @@ suite("route/device configuration flow and regression coverage", async (t) => {
   });
 
   await t.test("registers a driver sign-in event before passenger transactions", async () => {
+    const driver = await call("/api/drivers", {
+      method: "POST",
+      body: {
+        name_en: "Integration Driver",
+        name_ar: "سائق اختبار",
+        phone_number: "+96512345678",
+        civil_id: driverCivilId
+      }
+    });
+    assert.equal(driver.response.status, 201);
+    assert.equal(driver.json.data.name_en, "Integration Driver");
+    testDriverId = driver.json.data.id;
+
+    const card = await call(`/api/drivers/${testDriverId}/cards`, {
+      method: "POST",
+      body: { card_no: driverCardNo }
+    });
+    assert.equal(card.response.status, 201);
+    assert.equal(card.json.data.card_no, driverCardNo);
+
     const cardType = await call(`/api/card-types/${driverCardType}`, {
       method: "PUT",
       body: { is_driver_card: true }
@@ -112,7 +173,7 @@ suite("route/device configuration flow and regression coverage", async (t) => {
       transactions: [
         {
           record_uid: driverSignInUid,
-          card_no: "DRIVER001",
+          card_no: driverCardNo,
           card_type: driverCardType,
           record_type: "43",
           amount_raw: 0,
@@ -146,7 +207,7 @@ suite("route/device configuration flow and regression coverage", async (t) => {
   });
 
   await t.test("transaction report includes current bus and route and filters by them", async () => {
-    const result = await call(`/api/reports/transactions?limit=100&offset=0&bus_number=${encodeURIComponent(busNumber)}&route=${encodeURIComponent(`X${suffix}`)}&driver=${encodeURIComponent("DRIVER001")}`, { auth: false });
+    const result = await call(`/api/reports/transactions?limit=100&offset=0&bus_number=${encodeURIComponent(busNumber)}&route=${encodeURIComponent(`X${suffix}`)}&driver=${encodeURIComponent(testDriverId)}`, { auth: false });
     assert.equal(result.response.status, 200);
     const row = result.json.data.find((item) => item.record_uid === financialRecordUid);
     assert.ok(row);
@@ -154,7 +215,10 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     assert.equal(row.current_route_id, secondRouteId);
     assert.equal(row.current_route_code, `X${suffix}`);
     assert.equal(row.current_route_name, "Second Test Route");
-    assert.equal(row.current_driver_card_no, "DRIVER001");
+    assert.equal(row.current_driver_card_no, driverCardNo);
+    assert.equal(row.current_driver_id, testDriverId);
+    assert.equal(row.current_driver_name_en, "Integration Driver");
+    assert.equal(row.current_driver_civil_id, driverCivilId);
     assert.equal(result.json.summary.amount_total_kwd, 0.25);
   });
 
@@ -165,7 +229,7 @@ suite("route/device configuration flow and regression coverage", async (t) => {
       transactions: [
         {
           record_uid: driverSignOutUid,
-          card_no: "DRIVER001",
+          card_no: driverCardNo,
           card_type: driverCardType,
           record_type: "44",
           amount_raw: 0,

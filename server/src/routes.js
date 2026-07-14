@@ -26,8 +26,25 @@ function routeIdFromCode(routeCode) {
   return `R${normalized || Date.now()}`;
 }
 
+function idFromValue(prefix, value) {
+  const normalized = String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return `${prefix}${normalized || `${Date.now()}${Math.floor(Math.random() * 1000)}`}`;
+}
+
+function requireAdminUser(req) {
+  if (req.user?.role !== "admin") {
+    const err = new Error("Admin role is required");
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
 function routeResponse(row) {
-  return row ? { ...row, fare_fils: Number(row.fare_fils), fare_kwd: formatFareKwd(row.fare_fils) } : row;
+  return row ? {
+    ...row,
+    fare_fils: Number(row.fare_fils),
+    fare_kwd: formatFareKwd(row.fare_fils)
+  } : row;
 }
 
 function busResponse(row) {
@@ -183,6 +200,351 @@ router.post("/api/users", requireAuth, async (req, res, next) => {
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.get("/api/drivers", requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        d.id,
+        d.name_en,
+        d.name_ar,
+        d.phone_number,
+        d.civil_id,
+        d.is_active,
+        d.created_at,
+        d.updated_at,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'card_no', c.card_no,
+              'is_active', c.is_active,
+              'created_at', c.created_at,
+              'updated_at', c.updated_at
+            )
+            ORDER BY c.card_no
+          ) FILTER (WHERE c.card_no IS NOT NULL),
+          '[]'::json
+        ) AS cards
+      FROM drivers d
+      LEFT JOIN driver_cards c ON c.driver_id = d.id AND c.deleted_at IS NULL
+      WHERE d.deleted_at IS NULL
+      GROUP BY d.id
+      ORDER BY d.name_en ASC, d.civil_id ASC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/drivers", requireAuth, async (req, res, next) => {
+  try {
+    const nameEn = requiredString(req.body?.name_en, "name_en");
+    const civilId = requiredString(req.body?.civil_id, "civil_id");
+    const id = idFromValue("D", civilId);
+    const result = await pool.query(
+      `
+        INSERT INTO drivers (id, name_en, name_ar, phone_number, civil_id, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, name_en, name_ar, phone_number, civil_id, is_active, created_at, updated_at
+      `,
+      [id, nameEn, req.body?.name_ar || null, req.body?.phone_number || null, civilId, req.body?.is_active !== false]
+    );
+
+    res.status(201).json({ success: true, data: { ...result.rows[0], cards: [] } });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.put("/api/drivers/:id", requireAuth, async (req, res, next) => {
+  try {
+    const nameEn = requiredString(req.body?.name_en, "name_en");
+    const civilId = requiredString(req.body?.civil_id, "civil_id");
+    const existing = await pool.query(
+      "SELECT is_active FROM drivers WHERE id = $1 AND deleted_at IS NULL",
+      [req.params.id]
+    );
+    if (!existing.rowCount) return res.status(404).json({ success: false, error: "DRIVER_NOT_FOUND" });
+    const isActive = typeof req.body?.is_active === "boolean" ? req.body.is_active : existing.rows[0].is_active;
+    if (existing.rows[0].is_active !== isActive) requireAdminUser(req);
+    const result = await pool.query(
+      `
+        UPDATE drivers
+        SET name_en = $2,
+            name_ar = $3,
+            phone_number = $4,
+            civil_id = $5,
+            is_active = $6,
+            updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id, name_en, name_ar, phone_number, civil_id, is_active, created_at, updated_at
+      `,
+      [req.params.id, nameEn, req.body?.name_ar || null, req.body?.phone_number || null, civilId, isActive]
+    );
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.put("/api/drivers/:id/status", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    if (typeof req.body?.is_active !== "boolean") {
+      const err = new Error("is_active must be a boolean");
+      err.statusCode = 400;
+      throw err;
+    }
+    const result = await pool.query(
+      `
+        UPDATE drivers
+        SET is_active = $2, updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id, name_en, name_ar, phone_number, civil_id, is_active, created_at, updated_at
+      `,
+      [req.params.id, req.body.is_active]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "DRIVER_NOT_FOUND" });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/api/drivers/:id", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    const result = await pool.query(
+      `
+        UPDATE drivers
+        SET is_active = false, deleted_at = now(), updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id
+      `,
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "DRIVER_NOT_FOUND" });
+    await pool.query(
+      "UPDATE driver_cards SET is_active = false, deleted_at = now(), updated_at = now() WHERE driver_id = $1 AND deleted_at IS NULL",
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/drivers/:id/cards", requireAuth, async (req, res, next) => {
+  try {
+    const cardNo = requiredString(req.body?.card_no, "card_no");
+    const driver = await pool.query("SELECT id FROM drivers WHERE id = $1 AND deleted_at IS NULL", [req.params.id]);
+    if (!driver.rowCount) return res.status(404).json({ success: false, error: "DRIVER_NOT_FOUND" });
+    const result = await pool.query(
+      `
+        INSERT INTO driver_cards (card_no, driver_id, is_active)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (card_no) DO UPDATE SET
+          driver_id = EXCLUDED.driver_id,
+          is_active = EXCLUDED.is_active,
+          deleted_at = NULL,
+          updated_at = now()
+        RETURNING card_no, driver_id, is_active, created_at, updated_at
+      `,
+      [cardNo, req.params.id, req.body?.is_active !== false]
+    );
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.put("/api/driver-cards/:cardNo/status", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    if (typeof req.body?.is_active !== "boolean") {
+      const err = new Error("is_active must be a boolean");
+      err.statusCode = 400;
+      throw err;
+    }
+    const result = await pool.query(
+      `
+        UPDATE driver_cards
+        SET is_active = $2, updated_at = now()
+        WHERE card_no = $1 AND deleted_at IS NULL
+        RETURNING card_no, driver_id, is_active, created_at, updated_at
+      `,
+      [req.params.cardNo, req.body.is_active]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "CARD_NOT_FOUND" });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/api/driver-cards/:cardNo", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    const result = await pool.query(
+      `
+        UPDATE driver_cards
+        SET is_active = false, deleted_at = now(), updated_at = now()
+        WHERE card_no = $1 AND deleted_at IS NULL
+        RETURNING card_no
+      `,
+      [req.params.cardNo]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "CARD_NOT_FOUND" });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/api/stations", requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name_en, name_ar, longitude, latitude, is_active, created_at, updated_at
+      FROM stations
+      WHERE deleted_at IS NULL
+      ORDER BY name_en ASC, id ASC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/api/stations", requireAuth, async (req, res, next) => {
+  try {
+    const nameEn = requiredString(req.body?.name_en, "name_en");
+    const id = idFromValue("S", req.body?.station_code || nameEn);
+    const result = await pool.query(
+      `
+        INSERT INTO stations (id, name_en, name_ar, longitude, latitude, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, name_en, name_ar, longitude, latitude, is_active, created_at, updated_at
+      `,
+      [id, nameEn, req.body?.name_ar || null, parseNumeric(req.body?.longitude), parseNumeric(req.body?.latitude), req.body?.is_active !== false]
+    );
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.put("/api/stations/:id", requireAuth, async (req, res, next) => {
+  try {
+    const nameEn = requiredString(req.body?.name_en, "name_en");
+    const existing = await pool.query(
+      "SELECT is_active FROM stations WHERE id = $1 AND deleted_at IS NULL",
+      [req.params.id]
+    );
+    if (!existing.rowCount) return res.status(404).json({ success: false, error: "STATION_NOT_FOUND" });
+    const isActive = typeof req.body?.is_active === "boolean" ? req.body.is_active : existing.rows[0].is_active;
+    if (existing.rows[0].is_active !== isActive) requireAdminUser(req);
+    const result = await pool.query(
+      `
+        UPDATE stations
+        SET name_en = $2,
+            name_ar = $3,
+            longitude = $4,
+            latitude = $5,
+            is_active = $6,
+            updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id, name_en, name_ar, longitude, latitude, is_active, created_at, updated_at
+      `,
+      [req.params.id, nameEn, req.body?.name_ar || null, parseNumeric(req.body?.longitude), parseNumeric(req.body?.latitude), isActive]
+    );
+    await pool.query(
+      `
+        UPDATE buses
+        SET route_config_version = route_config_version + 1, updated_at = now()
+        WHERE deleted_at IS NULL
+          AND active_route_id IN (
+            SELECT id FROM routes
+            WHERE deleted_at IS NULL
+              AND (start_station_id = $1 OR end_station_id = $1)
+          )
+      `,
+      [req.params.id]
+    );
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") err.statusCode = 409;
+    next(err);
+  }
+});
+
+router.put("/api/stations/:id/status", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    if (typeof req.body?.is_active !== "boolean") {
+      const err = new Error("is_active must be a boolean");
+      err.statusCode = 400;
+      throw err;
+    }
+    const result = await pool.query(
+      `
+        UPDATE stations
+        SET is_active = $2, updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id, name_en, name_ar, longitude, latitude, is_active, created_at, updated_at
+      `,
+      [req.params.id, req.body.is_active]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "STATION_NOT_FOUND" });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/api/stations/:id", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    const result = await pool.query(
+      `
+        UPDATE stations
+        SET is_active = false, deleted_at = now(), updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id
+      `,
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "STATION_NOT_FOUND" });
+    await pool.query(
+      `
+        WITH cleared_routes AS (
+          UPDATE routes
+          SET start_station_id = NULLIF(start_station_id, $1),
+              end_station_id = NULLIF(end_station_id, $1),
+              updated_at = now()
+          WHERE deleted_at IS NULL
+            AND (start_station_id = $1 OR end_station_id = $1)
+          RETURNING id
+        )
+        UPDATE buses
+        SET route_config_version = route_config_version + 1, updated_at = now()
+        WHERE deleted_at IS NULL
+          AND active_route_id IN (SELECT id FROM cleared_routes)
+      `,
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
     next(err);
   }
 });
@@ -414,10 +776,19 @@ router.get("/api/routes", requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(`
       SELECT r.id, r.route_code, r.route_name, r.fare_fils, r.is_active,
+             r.start_station_id, r.end_station_id,
+             ss.name_en AS start_station_name_en, ss.name_ar AS start_station_name_ar,
+             ss.longitude AS start_station_longitude, ss.latitude AS start_station_latitude,
+             es.name_en AS end_station_name_en, es.name_ar AS end_station_name_ar,
+             es.longitude AS end_station_longitude, es.latitude AS end_station_latitude,
              r.created_at, r.updated_at, COUNT(b.id)::int AS assigned_buses_count
       FROM routes r
-      LEFT JOIN buses b ON b.active_route_id = r.id
-      GROUP BY r.id
+      LEFT JOIN stations ss ON ss.id = r.start_station_id
+      LEFT JOIN stations es ON es.id = r.end_station_id
+      LEFT JOIN buses b ON b.active_route_id = r.id AND b.deleted_at IS NULL
+      WHERE r.deleted_at IS NULL
+      GROUP BY r.id, ss.name_en, ss.name_ar, ss.longitude, ss.latitude,
+               es.name_en, es.name_ar, es.longitude, es.latitude
       ORDER BY route_code ASC
     `);
 
@@ -432,15 +803,27 @@ router.post("/api/routes", requireAuth, async (req, res, next) => {
     const routeCode = requiredString(req.body?.route_code, "route_code");
     const routeName = requiredString(req.body?.route_name, "route_name");
     const fareFils = parseNonNegativeInteger(req.body?.fare_fils, "fare_fils");
+    const startStationId = req.body?.start_station_id || null;
+    const endStationId = req.body?.end_station_id || null;
     const id = routeIdFromCode(routeCode);
+
+    if (startStationId || endStationId) {
+      const stations = await pool.query(
+        "SELECT id FROM stations WHERE id = ANY($1::text[]) AND deleted_at IS NULL",
+        [[startStationId, endStationId].filter(Boolean)]
+      );
+      if (stations.rowCount !== [startStationId, endStationId].filter(Boolean).length) {
+        return res.status(404).json({ success: false, error: "STATION_NOT_FOUND" });
+      }
+    }
 
     const result = await pool.query(
       `
-        INSERT INTO routes (id, route_code, route_name, fare_fils, is_active)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, route_code, route_name, fare_fils, is_active, created_at, updated_at
+        INSERT INTO routes (id, route_code, route_name, fare_fils, start_station_id, end_station_id, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, route_code, route_name, fare_fils, start_station_id, end_station_id, is_active, created_at, updated_at
       `,
-      [id, routeCode, routeName, fareFils, req.body?.is_active !== false]
+      [id, routeCode, routeName, fareFils, startStationId, endStationId, req.body?.is_active !== false]
     );
 
     res.status(201).json({ success: true, data: routeResponse({ ...result.rows[0], assigned_buses_count: 0 }) });
@@ -457,12 +840,32 @@ router.put("/api/routes/:id", requireAuth, async (req, res, next) => {
     const routeName = requiredString(req.body?.route_name, "route_name");
     const fareFils = parseNonNegativeInteger(req.body?.fare_fils, "fare_fils");
     const isActive = req.body?.is_active !== false;
+    const startStationId = req.body?.start_station_id || null;
+    const endStationId = req.body?.end_station_id || null;
 
     await client.query("BEGIN");
     const existing = await client.query("SELECT * FROM routes WHERE id = $1 FOR UPDATE", [req.params.id]);
     if (existing.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    }
+    if (existing.rows[0].deleted_at) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    }
+    if (existing.rows[0].is_active !== isActive) {
+      requireAdminUser(req);
+    }
+
+    if (startStationId || endStationId) {
+      const stations = await client.query(
+        "SELECT id FROM stations WHERE id = ANY($1::text[]) AND deleted_at IS NULL",
+        [[startStationId, endStationId].filter(Boolean)]
+      );
+      if (stations.rowCount !== [startStationId, endStationId].filter(Boolean).length) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ success: false, error: "STATION_NOT_FOUND" });
+      }
     }
 
     const result = await client.query(
@@ -472,18 +875,22 @@ router.put("/api/routes/:id", requireAuth, async (req, res, next) => {
             route_name = $3,
             fare_fils = $4,
             is_active = $5,
+            start_station_id = $6,
+            end_station_id = $7,
             updated_at = now()
         WHERE id = $1
-        RETURNING id, route_code, route_name, fare_fils, is_active, created_at, updated_at
+        RETURNING id, route_code, route_name, fare_fils, start_station_id, end_station_id, is_active, created_at, updated_at
       `,
-      [req.params.id, routeCode, routeName, fareFils, isActive]
+      [req.params.id, routeCode, routeName, fareFils, isActive, startStationId, endStationId]
     );
 
     const assignedDeviceConfigChanged =
       existing.rows[0].route_code !== routeCode ||
       existing.rows[0].route_name !== routeName ||
       Number(existing.rows[0].fare_fils) !== fareFils ||
-      existing.rows[0].is_active !== isActive;
+      existing.rows[0].is_active !== isActive ||
+      (existing.rows[0].start_station_id || null) !== startStationId ||
+      (existing.rows[0].end_station_id || null) !== endStationId;
 
     if (assignedDeviceConfigChanged) {
       await client.query(
@@ -516,6 +923,31 @@ router.put("/api/routes/:id", requireAuth, async (req, res, next) => {
   }
 });
 
+router.delete("/api/routes/:id", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    const result = await pool.query(
+      `
+        UPDATE routes
+        SET is_active = false, deleted_at = now(), updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id
+      `,
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
+    await pool.query(
+      `UPDATE buses
+       SET route_config_version = route_config_version + 1, updated_at = now()
+       WHERE active_route_id = $1 AND deleted_at IS NULL`,
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/api/buses", requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(`
@@ -527,6 +959,7 @@ router.get("/api/buses", requireAuth, async (req, res, next) => {
         b.device_id,
         b.active_route_id,
         b.route_config_version,
+        b.is_active,
         b.created_at,
         b.updated_at,
         r.route_code,
@@ -536,7 +969,8 @@ router.get("/api/buses", requireAuth, async (req, res, next) => {
         r.fare_fils,
         r.is_active AS route_is_active
       FROM buses b
-      LEFT JOIN routes r ON r.id = b.active_route_id
+      LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+      WHERE b.deleted_at IS NULL
       ORDER BY b.bus_code ASC
     `);
 
@@ -557,7 +991,7 @@ router.post("/api/buses", requireAuth, async (req, res, next) => {
 
     await client.query("BEGIN");
     if (activeRouteId) {
-      const route = await client.query("SELECT is_active FROM routes WHERE id = $1", [activeRouteId]);
+      const route = await client.query("SELECT is_active FROM routes WHERE id = $1 AND deleted_at IS NULL", [activeRouteId]);
       if (route.rowCount === 0) {
         await client.query("ROLLBACK");
         return res.status(404).json({ success: false, error: "ROUTE_NOT_FOUND" });
@@ -580,7 +1014,7 @@ router.post("/api/buses", requireAuth, async (req, res, next) => {
       `
         INSERT INTO buses (id, bus_code, plate_number, device_id, active_route_id)
         VALUES ($1, $1, $2, $3, $4)
-        RETURNING id, bus_code, plate_number, device_id, active_route_id, route_config_version, created_at, updated_at
+        RETURNING id, bus_code, plate_number, device_id, active_route_id, route_config_version, is_active, created_at, updated_at
       `,
       [busCode, plateNumber, deviceId, activeRouteId]
     );
@@ -589,7 +1023,7 @@ router.post("/api/buses", requireAuth, async (req, res, next) => {
     const configured = await pool.query(
       `SELECT b.*, b.bus_code AS bus_number, r.route_code, r.route_name, r.fare_fils,
               r.is_active AS route_is_active
-       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id WHERE b.id = $1`,
+       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL WHERE b.id = $1 AND b.deleted_at IS NULL`,
       [result.rows[0].id]
     );
     res.status(201).json({ success: true, data: busResponse(configured.rows[0]) });
@@ -609,8 +1043,8 @@ router.put("/api/buses/:id", requireAuth, async (req, res, next) => {
     await client.query("BEGIN");
     const existing = await client.query(
       `SELECT b.*, r.fare_fils AS effective_fare_fils
-       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id
-       WHERE b.id = $1 FOR UPDATE OF b`, [req.params.id]
+       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+       WHERE b.id = $1 AND b.deleted_at IS NULL FOR UPDATE OF b`, [req.params.id]
     );
     if (!existing.rowCount) {
       await client.query("ROLLBACK");
@@ -657,7 +1091,7 @@ router.put("/api/buses/:id", requireAuth, async (req, res, next) => {
     const result = await pool.query(
       `SELECT b.*, b.bus_code AS bus_number, r.route_code, r.route_name, r.fare_fils,
               r.is_active AS route_is_active
-       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id WHERE b.id = $1`,
+       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL WHERE b.id = $1 AND b.deleted_at IS NULL`,
       [current.id]
     );
     res.json({ success: true, data: busResponse(result.rows[0]) });
@@ -666,6 +1100,54 @@ router.put("/api/buses/:id", requireAuth, async (req, res, next) => {
     if (err.code === "23505") err.statusCode = 409;
     next(err);
   } finally { client.release(); }
+});
+
+router.put("/api/buses/:id/status", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    if (typeof req.body?.is_active !== "boolean") {
+      const err = new Error("is_active must be a boolean");
+      err.statusCode = 400;
+      throw err;
+    }
+    const result = await pool.query(
+      `
+        UPDATE buses
+        SET is_active = $2,
+            route_config_version = route_config_version + 1,
+            updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id, bus_code, plate_number, device_id, active_route_id, route_config_version, is_active, created_at, updated_at
+      `,
+      [req.params.id, req.body.is_active]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "BUS_NOT_FOUND" });
+    res.json({ success: true, data: busResponse(result.rows[0]) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete("/api/buses/:id", requireAuth, async (req, res, next) => {
+  try {
+    requireAdminUser(req);
+    const result = await pool.query(
+      `
+        UPDATE buses
+        SET is_active = false,
+            deleted_at = now(),
+            route_config_version = route_config_version + 1,
+            updated_at = now()
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id
+      `,
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: "BUS_NOT_FOUND" });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) => {
@@ -682,6 +1164,7 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
         FROM buses b
         LEFT JOIN routes old_route ON old_route.id = b.active_route_id
         WHERE b.id = $1
+          AND b.deleted_at IS NULL
         FOR UPDATE OF b
       `,
       [req.params.id]
@@ -693,7 +1176,7 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
     }
 
     const nextRoute = await client.query(
-      "SELECT id, fare_fils, is_active FROM routes WHERE id = $1",
+      "SELECT id, fare_fils, is_active FROM routes WHERE id = $1 AND deleted_at IS NULL",
       [newRouteId]
     );
 
@@ -712,11 +1195,11 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
         `
           SELECT
             b.id, b.bus_code, b.plate_number, b.device_id, b.active_route_id,
-            b.route_config_version, b.created_at, b.updated_at,
+            b.route_config_version, b.is_active, b.created_at, b.updated_at,
             r.route_code, r.route_name, r.fare_fils, r.is_active AS route_is_active
           FROM buses b
-          LEFT JOIN routes r ON r.id = b.active_route_id
-          WHERE b.id = $1
+          LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+          WHERE b.id = $1 AND b.deleted_at IS NULL
         `,
         [req.params.id]
       );
@@ -731,7 +1214,7 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
             route_config_version = route_config_version + 1,
             updated_at = now()
         WHERE id = $1
-        RETURNING id, bus_code, plate_number, device_id, active_route_id, route_config_version, created_at, updated_at
+        RETURNING id, bus_code, plate_number, device_id, active_route_id, route_config_version, is_active, created_at, updated_at
       `,
       [req.params.id, newRouteId]
     );
@@ -759,11 +1242,11 @@ router.put("/api/buses/:id/active-route", requireAuth, async (req, res, next) =>
       `
         SELECT
           b.id, b.bus_code, b.plate_number, b.device_id, b.active_route_id,
-          b.route_config_version, b.created_at, b.updated_at,
+          b.route_config_version, b.is_active, b.created_at, b.updated_at,
           r.route_code, r.route_name, r.fare_fils, r.is_active AS route_is_active
         FROM buses b
-        LEFT JOIN routes r ON r.id = b.active_route_id
-        WHERE b.id = $1
+        LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+        WHERE b.id = $1 AND b.deleted_at IS NULL
       `,
       [updated.rows[0].id]
     );
@@ -792,10 +1275,21 @@ router.get("/api/devices/:deviceId/active-route", requireApiKey, async (req, res
           r.route_code,
           r.route_name,
           r.fare_fils,
-          r.is_active AS route_is_active
+          r.is_active AS route_is_active,
+          r.start_station_id,
+          r.end_station_id,
+          ss.name_en AS start_station_name_en,
+          ss.name_ar AS start_station_name_ar,
+          es.name_en AS end_station_name_en,
+          es.name_ar AS end_station_name_ar
         FROM buses b
-        LEFT JOIN routes r ON r.id = b.active_route_id
+        LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+        LEFT JOIN stations ss ON ss.id = r.start_station_id
+        LEFT JOIN stations es ON es.id = r.end_station_id
         WHERE b.device_id = $1
+          AND b.is_active = true
+          AND b.deleted_at IS NULL
+          AND (r.deleted_at IS NULL OR r.id IS NULL)
       `,
       [req.params.deviceId]
     );
@@ -823,6 +1317,12 @@ router.get("/api/devices/:deviceId/active-route", requireApiKey, async (req, res
       route_name: row.route_name,
       fare_fils: row.fare_fils,
       fare_kwd: formatFareKwd(row.fare_fils),
+      start_station_id: row.start_station_id,
+      start_station_name_en: row.start_station_name_en,
+      start_station_name_ar: row.start_station_name_ar,
+      end_station_id: row.end_station_id,
+      end_station_name_en: row.end_station_name_en,
+      end_station_name_ar: row.end_station_name_ar,
       updated_at: row.updated_at
     });
   } catch (err) {
@@ -952,17 +1452,33 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             COALESCE(r.route_code, d.route_no) AS current_route_code,
             COALESCE(r.route_name, d.route_name) AS current_route_name,
             CASE WHEN driver_event.record_type = '43' THEN driver_event.card_no ELSE NULL END AS current_driver_card_no,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_id ELSE NULL END AS current_driver_id,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_name_en ELSE NULL END AS current_driver_name_en,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_name_ar ELSE NULL END AS current_driver_name_ar,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_civil_id ELSE NULL END AS current_driver_civil_id,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_phone_number ELSE NULL END AS current_driver_phone_number,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions t
           LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
           LEFT JOIN devices d ON d.device_id = t.device_id
           LEFT JOIN buses b ON b.device_id = t.device_id
-          LEFT JOIN routes r ON r.id = b.active_route_id
+          LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
           LEFT JOIN LATERAL (
-            SELECT dt.card_no, dt.record_type
+            SELECT
+              dt.card_no,
+              dt.record_type,
+              driver_cards.driver_id,
+              drivers.name_en AS driver_name_en,
+              drivers.name_ar AS driver_name_ar,
+              drivers.civil_id AS driver_civil_id,
+              drivers.phone_number AS driver_phone_number
             FROM transactions dt
             INNER JOIN card_type_definitions dc
               ON dc.card_type = dt.card_type AND dc.is_driver_card = true
+            LEFT JOIN driver_cards
+              ON driver_cards.card_no = dt.card_no AND driver_cards.deleted_at IS NULL
+            LEFT JOIN drivers
+              ON drivers.id = driver_cards.driver_id AND drivers.deleted_at IS NULL
             WHERE dt.device_id = t.device_id
               AND dt.record_type IN ('43', '44')
               AND (
@@ -985,7 +1501,9 @@ router.get("/api/reports/transactions", async (req, res, next) => {
           id, record_uid, device_id, record_index, sequence_no, card_no, card_type,
           card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
           amount_display_kwd, amount_copy_raw, transaction_datetime,
-          bus_number, current_route_id, current_route_code, current_route_name, current_driver_card_no,
+          bus_number, current_route_id, current_route_code, current_route_name,
+          current_driver_card_no, current_driver_id, current_driver_name_en, current_driver_name_ar,
+          current_driver_civil_id, current_driver_phone_number,
           transaction_datetime_raw,
           to_char(transaction_datetime_kuwait_ts, 'YYYY-MM-DD HH24:MI:SS') AS transaction_datetime_kuwait,
           record_type, sub_type, crc, source_file, received_at
@@ -1001,7 +1519,14 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             OR current_route_code = $6
             OR current_route_name = $6
           )
-          AND ($7::text IS NULL OR current_driver_card_no = $7)
+          AND (
+            $7::text IS NULL
+            OR current_driver_card_no = $7
+            OR current_driver_id = $7
+            OR current_driver_name_en = $7
+            OR current_driver_name_ar = $7
+            OR current_driver_civil_id = $7
+          )
         ORDER BY id DESC
         LIMIT $8 OFFSET $9
       `,
@@ -1020,17 +1545,31 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             COALESCE(r.route_code, d.route_no) AS current_route_code,
             COALESCE(r.route_name, d.route_name) AS current_route_name,
             CASE WHEN driver_event.record_type = '43' THEN driver_event.card_no ELSE NULL END AS current_driver_card_no,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_id ELSE NULL END AS current_driver_id,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_name_en ELSE NULL END AS current_driver_name_en,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_name_ar ELSE NULL END AS current_driver_name_ar,
+            CASE WHEN driver_event.record_type = '43' THEN driver_event.driver_civil_id ELSE NULL END AS current_driver_civil_id,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions t
           LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
           LEFT JOIN devices d ON d.device_id = t.device_id
           LEFT JOIN buses b ON b.device_id = t.device_id
-          LEFT JOIN routes r ON r.id = b.active_route_id
+          LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
           LEFT JOIN LATERAL (
-            SELECT dt.card_no, dt.record_type
+            SELECT
+              dt.card_no,
+              dt.record_type,
+              driver_cards.driver_id,
+              drivers.name_en AS driver_name_en,
+              drivers.name_ar AS driver_name_ar,
+              drivers.civil_id AS driver_civil_id
             FROM transactions dt
             INNER JOIN card_type_definitions dc
               ON dc.card_type = dt.card_type AND dc.is_driver_card = true
+            LEFT JOIN driver_cards
+              ON driver_cards.card_no = dt.card_no AND driver_cards.deleted_at IS NULL
+            LEFT JOIN drivers
+              ON drivers.id = driver_cards.driver_id AND drivers.deleted_at IS NULL
             WHERE dt.device_id = t.device_id
               AND dt.record_type IN ('43', '44')
               AND (
@@ -1073,7 +1612,14 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             OR current_route_code = $6
             OR current_route_name = $6
           )
-          AND ($7::text IS NULL OR current_driver_card_no = $7)
+          AND (
+            $7::text IS NULL
+            OR current_driver_card_no = $7
+            OR current_driver_id = $7
+            OR current_driver_name_en = $7
+            OR current_driver_name_ar = $7
+            OR current_driver_civil_id = $7
+          )
       `,
       [deviceId || null, cardNo || null, from || null, to || null, busNumber || null, routeFilter || null, driverFilter || null]
     );
@@ -1133,6 +1679,11 @@ router.get("/api/reports/driver-events", async (req, res, next) => {
             t.device_id,
             t.card_no,
             t.card_type,
+            driver_cards.driver_id,
+            drivers.name_en AS driver_name_en,
+            drivers.name_ar AS driver_name_ar,
+            drivers.civil_id AS driver_civil_id,
+            drivers.phone_number AS driver_phone_number,
             t.record_type,
             t.sub_type,
             t.transaction_datetime,
@@ -1142,6 +1693,10 @@ router.get("/api/reports/driver-events", async (req, res, next) => {
           FROM transactions t
           INNER JOIN card_type_definitions c
             ON c.card_type = t.card_type AND c.is_driver_card = true
+          LEFT JOIN driver_cards
+            ON driver_cards.card_no = t.card_no AND driver_cards.deleted_at IS NULL
+          LEFT JOIN drivers
+            ON drivers.id = driver_cards.driver_id AND drivers.deleted_at IS NULL
           WHERE t.record_type IN ('43', '44')
         )
         SELECT
@@ -1153,6 +1708,11 @@ router.get("/api/reports/driver-events", async (req, res, next) => {
           d.route_name,
           n.card_no,
           n.card_type,
+          n.driver_id,
+          n.driver_name_en,
+          n.driver_name_ar,
+          n.driver_civil_id,
+          n.driver_phone_number,
           CASE n.record_type
             WHEN '43' THEN 'login'
             WHEN '44' THEN 'logout'

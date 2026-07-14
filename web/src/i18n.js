@@ -5,7 +5,9 @@ export const translations = {
     transactions: "Transactions",
     devices: "Devices/Buses",
     routes: "Routes",
+    stations: "Stations",
     buses: "Buses",
+    drivers: "Drivers",
     cardTypes: "Card Types",
     driverLoginLogout: "Driver Login/Logout",
     liveMap: "Live Map",
@@ -59,6 +61,8 @@ export const translations = {
     inactive: "Inactive",
     activate: "Activate",
     deactivate: "Deactivate",
+    delete: "Delete",
+    confirmDelete: "Delete this record?",
     edit: "Edit", cancel: "Cancel", close: "Close",
 
     // Overview
@@ -139,6 +143,29 @@ export const translations = {
     saveAssignment: "Save assignment", configurationSaved: "Configuration saved. Version:",
     searchDeviceBus: "Search device ID or bus number", allRoutes: "All routes",
     editDevice: "Edit device / bus", deviceConfiguration: "Device configuration",
+    startStation: "Start station",
+    endStation: "End station",
+
+    // Stations
+    addStation: "Add station",
+    editStation: "Edit station",
+    stationNameEn: "Station name (EN)",
+    stationNameAr: "Station name (AR)",
+    latitude: "Latitude",
+    longitude: "Longitude",
+    location: "Location",
+    searchStations: "Search stations",
+
+    // Drivers
+    addDriver: "Add driver",
+    editDriver: "Edit driver",
+    driver: "Driver",
+    driverNameEn: "Driver name (EN)",
+    driverNameAr: "Driver name (AR)",
+    phoneNumber: "Phone number",
+    civilId: "Civil ID",
+    assignCard: "Assign card",
+    cards: "Cards",
 
     // Card types
     fareMedia: "Fare media",
@@ -179,7 +206,9 @@ export const translations = {
     transactions: "المعاملات",
     devices: "الأجهزة والحافلات",
     routes: "المسارات",
+    stations: "المحطات",
     buses: "الحافلات",
+    drivers: "السائقون",
     cardTypes: "أنواع البطاقات",
     driverLoginLogout: "تسجيل دخول وخروج السائقين",
     liveMap: "الخريطة المباشرة",
@@ -233,6 +262,8 @@ export const translations = {
     inactive: "غير نشط",
     activate: "تفعيل",
     deactivate: "تعطيل",
+    delete: "حذف",
+    confirmDelete: "هل تريد حذف هذا السجل؟",
     edit: "تعديل", cancel: "إلغاء", close: "إغلاق",
 
     // Overview
@@ -313,6 +344,29 @@ export const translations = {
     saveAssignment: "حفظ التعيين", configurationSaved: "تم حفظ الإعداد. الإصدار:",
     searchDeviceBus: "ابحث بمعرّف الجهاز أو رقم الحافلة", allRoutes: "كل المسارات",
     editDevice: "تعديل الجهاز والحافلة", deviceConfiguration: "إعداد الجهاز",
+    startStation: "محطة البداية",
+    endStation: "محطة النهاية",
+
+    // Stations
+    addStation: "إضافة محطة",
+    editStation: "تعديل المحطة",
+    stationNameEn: "اسم المحطة بالإنجليزية",
+    stationNameAr: "اسم المحطة بالعربية",
+    latitude: "خط العرض",
+    longitude: "خط الطول",
+    location: "الموقع",
+    searchStations: "ابحث في المحطات",
+
+    // Drivers
+    addDriver: "إضافة سائق",
+    editDriver: "تعديل السائق",
+    driver: "السائق",
+    driverNameEn: "اسم السائق بالإنجليزية",
+    driverNameAr: "اسم السائق بالعربية",
+    phoneNumber: "رقم الهاتف",
+    civilId: "الرقم المدني",
+    assignCard: "تعيين بطاقة",
+    cards: "البطاقات",
 
     // Card types
     fareMedia: "وسائط الأجرة",

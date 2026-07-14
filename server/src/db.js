@@ -33,10 +33,29 @@ export async function initDb() {
       route_code text UNIQUE NOT NULL,
       route_name text NOT NULL,
       fare_fils int NOT NULL CHECK (fare_fils >= 0),
+      start_station_id text NULL,
+      end_station_id text NULL,
       is_active boolean NOT NULL DEFAULT true,
       created_at timestamptz DEFAULT now(),
-      updated_at timestamptz DEFAULT now()
+      updated_at timestamptz DEFAULT now(),
+      deleted_at timestamptz NULL
     );
+
+    CREATE TABLE IF NOT EXISTS stations (
+      id text PRIMARY KEY,
+      name_en text NOT NULL,
+      name_ar text NULL,
+      longitude numeric(10,7) NULL,
+      latitude numeric(10,7) NULL,
+      is_active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      deleted_at timestamptz NULL
+    );
+
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS start_station_id text NULL;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS end_station_id text NULL;
+    ALTER TABLE routes ADD COLUMN IF NOT EXISTS deleted_at timestamptz NULL;
 
     CREATE TABLE IF NOT EXISTS buses (
       id text PRIMARY KEY,
@@ -45,9 +64,14 @@ export async function initDb() {
       device_id text UNIQUE NOT NULL REFERENCES devices(device_id),
       active_route_id text NULL REFERENCES routes(id),
       route_config_version int NOT NULL DEFAULT 1,
+      is_active boolean NOT NULL DEFAULT true,
       created_at timestamptz DEFAULT now(),
-      updated_at timestamptz DEFAULT now()
+      updated_at timestamptz DEFAULT now(),
+      deleted_at timestamptz NULL
     );
+
+    ALTER TABLE buses ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+    ALTER TABLE buses ADD COLUMN IF NOT EXISTS deleted_at timestamptz NULL;
 
     CREATE TABLE IF NOT EXISTS route_change_logs (
       id bigserial PRIMARY KEY,
@@ -76,6 +100,27 @@ export async function initDb() {
       is_driver_card boolean NOT NULL DEFAULT false,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS drivers (
+      id text PRIMARY KEY,
+      name_en text NOT NULL,
+      name_ar text NULL,
+      phone_number text NULL,
+      civil_id text UNIQUE NOT NULL,
+      is_active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      deleted_at timestamptz NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS driver_cards (
+      card_no text PRIMARY KEY,
+      driver_id text NOT NULL REFERENCES drivers(id),
+      is_active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      deleted_at timestamptz NULL
     );
 
     CREATE TABLE IF NOT EXISTS transactions (
@@ -171,6 +216,9 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_buses_device_id ON buses(device_id);
     CREATE INDEX IF NOT EXISTS idx_buses_active_route_id ON buses(active_route_id);
     CREATE INDEX IF NOT EXISTS idx_route_change_logs_bus_created ON route_change_logs(bus_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_routes_start_station_id ON routes(start_station_id);
+    CREATE INDEX IF NOT EXISTS idx_routes_end_station_id ON routes(end_station_id);
+    CREATE INDEX IF NOT EXISTS idx_driver_cards_driver_id ON driver_cards(driver_id);
   `);
 
   await seedAdminUser();

@@ -802,6 +802,12 @@ main {
   color: var(--ink-2);
 }
 
+.danger-action {
+  background: rgba(255, 92, 122, 0.12);
+  border-color: rgba(255, 92, 122, 0.35);
+  color: #ff7a95;
+}
+
 /* 13. Page layout ------------------------------------------- */
 .page {
   display: grid;
@@ -1971,6 +1977,7 @@ td                               { font-size: 13px; }
 
 /* Device, bus and fare management */
 .management-layout { display: grid; gap: 18px; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); }
+.stacked-panels { align-self: start; display: grid; gap: 18px; }
 .sticky-form { align-self: start; position: sticky; top: 20px; }
 .field-hint { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 11px; }
 .form-success { color: var(--brand-green); font-size: 12px; margin: 0; }
@@ -1985,6 +1992,11 @@ td                               { font-size: 13px; }
 .inline-editor input { min-width: 0; width: 100%; }
 .management-filters { display: grid; gap: 8px; grid-template-columns: minmax(180px, 1fr) minmax(150px, 220px); padding: 0 16px 14px; }
 .bus-actions { display: grid; gap: 7px; min-width: 180px; }
+.card-list { display: flex; flex-wrap: wrap; gap: 8px; min-width: 240px; }
+.card-chip { align-items: center; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 8px; display: inline-flex; gap: 7px; padding: 6px 8px; }
+.card-chip b { font-family: 'DM Mono', monospace; font-size: 11px; }
+.card-chip small { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.card-chip button { background: transparent; border: 0; color: var(--accent); cursor: pointer; font-size: 10px; font-weight: 700; padding: 0; text-transform: uppercase; }
 .dialog-backdrop { align-items: center; background: rgba(1, 7, 13, 0.72); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 50; }
 .dialog { display: grid; gap: 16px; max-height: 88dvh; max-width: 600px; overflow: auto; padding: 22px; width: 100%; }
 .json-dialog pre { background: var(--base-2); border: 1px solid var(--line); color: var(--accent); direction: ltr; font-family: 'DM Mono', monospace; font-size: 12px; margin: 0; overflow: auto; padding: 16px; text-align: left; }

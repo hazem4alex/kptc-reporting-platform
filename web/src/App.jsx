@@ -5,11 +5,13 @@ import { createTranslator } from "./i18n.js";
 import { CardTypes } from "./pages/CardTypes.jsx";
 import { BusesManagement } from "./pages/BusesManagement.jsx";
 import { Devices } from "./pages/Devices.jsx";
+import { DriversManagement } from "./pages/DriversManagement.jsx";
 import { DriverEvents } from "./pages/DriverEvents.jsx";
 import { LiveMap } from "./pages/LiveMap.jsx";
 import { Login } from "./pages/Login.jsx";
 import { Overview } from "./pages/Overview.jsx";
 import { RoutesManagement } from "./pages/RoutesManagement.jsx";
+import { StationsManagement } from "./pages/StationsManagement.jsx";
 import { Transactions } from "./pages/Transactions.jsx";
 import { Users } from "./pages/Users.jsx";
 
@@ -96,6 +98,27 @@ function Icon({ name }) {
       </svg>
     );
   }
+  if (name === "drivers") {
+    return (
+      <svg {...props}>
+        <circle cx="9" cy="8" r="3.2" />
+        <path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+        <path d="M16 6h5" />
+        <path d="M16 10h4" />
+        <path d="M16 14h5" />
+      </svg>
+    );
+  }
+  if (name === "stations") {
+    return (
+      <svg {...props}>
+        <path d="M6 21V7a6 6 0 0 1 12 0v14" />
+        <path d="M4 21h16" />
+        <path d="M8 10h8" />
+        <path d="M8 15h8" />
+      </svg>
+    );
+  }
   if (name === "live-map") {
     return (
       <svg {...props}>
@@ -122,7 +145,9 @@ const nav = [
   { id: "transactions", label: "transactions" },
   { id: "devices",      label: "devices"      },
   { id: "routes",       label: "routes"       },
+  { id: "stations",     label: "stations"     },
   { id: "buses",        label: "buses"        },
+  { id: "drivers",      label: "drivers"      },
   { id: "card-types",   label: "cardTypes"    },
   { id: "driver-events", label: "driverLoginLogout" },
   { id: "live-map",     label: "liveMap"      },
@@ -198,6 +223,8 @@ export default function App() {
           cardTypes,
           driverEvents,
           locations,
+          drivers,
+          stations,
           appUsers
         ] = await Promise.all([
           api.summary(),
@@ -208,6 +235,8 @@ export default function App() {
           api.cardTypes(session.token),
           api.driverEvents(),
           api.locations(),
+          api.drivers(session.token),
+          api.stations(session.token),
           api.users(session.token)
         ]);
         const [routes, buses] = await Promise.all([
@@ -225,6 +254,8 @@ export default function App() {
             cardTypes: cardTypes.data,
             driverEvents: driverEvents.data,
             locations: locations.data,
+            drivers: drivers.data,
+            stations: stations.data,
             routes: routes.data,
             buses: buses.data
           });
@@ -247,20 +278,63 @@ export default function App() {
 
   const page = useMemo(() => {
     if (!data) return null;
+    const isAdmin = session?.user?.role === "admin";
     if (active === "transactions") return <Transactions rows={data.transactions} t={t} />;
     if (active === "devices") return <Devices rows={data.devices} t={t} />;
     if (active === "routes") {
-      return <RoutesManagement rows={data.routes} t={t} onCreateRoute={createRoute} onUpdateRoute={updateRoute} />;
+      return (
+        <RoutesManagement
+          rows={data.routes}
+          stations={data.stations}
+          isAdmin={isAdmin}
+          t={t}
+          onCreateRoute={createRoute}
+          onUpdateRoute={updateRoute}
+          onDeleteRoute={deleteRoute}
+        />
+      );
+    }
+    if (active === "stations") {
+      return (
+        <StationsManagement
+          rows={data.stations}
+          isAdmin={isAdmin}
+          t={t}
+          onCreateStation={createStation}
+          onUpdateStation={updateStation}
+          onSetStationStatus={setStationStatus}
+          onDeleteStation={deleteStation}
+        />
+      );
     }
     if (active === "buses") {
       return (
         <BusesManagement
           rows={data.buses}
           routes={data.routes}
+          isAdmin={isAdmin}
           t={t}
           onCreateBus={createBus}
           onUpdateBus={updateBus}
           onChangeRoute={changeBusRoute}
+          onSetBusStatus={setBusStatus}
+          onDeleteBus={deleteBus}
+        />
+      );
+    }
+    if (active === "drivers") {
+      return (
+        <DriversManagement
+          rows={data.drivers}
+          isAdmin={isAdmin}
+          t={t}
+          onCreateDriver={createDriver}
+          onUpdateDriver={updateDriver}
+          onSetDriverStatus={setDriverStatus}
+          onDeleteDriver={deleteDriver}
+          onAssignDriverCard={assignDriverCard}
+          onSetDriverCardStatus={setDriverCardStatus}
+          onDeleteDriverCard={deleteDriverCard}
         />
       );
     }
@@ -269,7 +343,7 @@ export default function App() {
     if (active === "live-map") return <LiveMap rows={data.locations} t={t} />;
     if (active === "users") return <Users rows={users} t={t} onCreateUser={createUser} />;
     return <Overview data={data} t={t} />;
-  }, [active, data, t, users]);
+  }, [active, data, session, t, users]);
 
   async function handleLogin(event) {
     event.preventDefault();
@@ -302,41 +376,161 @@ export default function App() {
     setUsers((current) => [...current, result.data]);
   }
 
+  async function refreshRoutesBusesAndTransactions() {
+    const [routes, buses, transactions, devices] = await Promise.all([
+      api.routes(session.token),
+      api.buses(session.token),
+      api.latestTransactions(),
+      api.devices()
+    ]);
+    setData((current) => ({
+      ...current,
+      routes: routes.data,
+      buses: buses.data,
+      transactions: transactions.data,
+      devices: devices.data
+    }));
+  }
+
+  async function refreshStationsRoutesAndBuses() {
+    const [stations, routes, buses] = await Promise.all([
+      api.stations(session.token),
+      api.routes(session.token),
+      api.buses(session.token)
+    ]);
+    setData((current) => ({
+      ...current,
+      stations: stations.data,
+      routes: routes.data,
+      buses: buses.data
+    }));
+  }
+
+  async function refreshDriversTransactionsAndEvents() {
+    const [drivers, transactions, driverEvents] = await Promise.all([
+      api.drivers(session.token),
+      api.latestTransactions(),
+      api.driverEvents()
+    ]);
+    setData((current) => ({
+      ...current,
+      drivers: drivers.data,
+      transactions: transactions.data,
+      driverEvents: driverEvents.data
+    }));
+  }
+
   async function createRoute(route) {
     const result = await api.createRoute(session.token, route);
-    setData((current) => ({ ...current, routes: [...current.routes, result.data] }));
+    await refreshRoutesBusesAndTransactions();
+    return result.data;
   }
 
   async function updateRoute(route) {
     const result = await api.updateRoute(session.token, route);
-    const refreshedBuses = await api.buses(session.token);
-    setData((current) => ({
-      ...current,
-      routes: current.routes.map((item) => (item.id === result.data.id ? result.data : item)),
-      buses: refreshedBuses.data
-    }));
+    await refreshRoutesBusesAndTransactions();
+    return result.data;
+  }
+
+  async function deleteRoute(routeId) {
+    const result = await api.deleteRoute(session.token, routeId);
+    await refreshRoutesBusesAndTransactions();
+    return result.data;
+  }
+
+  async function createStation(station) {
+    const result = await api.createStation(session.token, station);
+    await refreshStationsRoutesAndBuses();
+    return result.data;
+  }
+
+  async function updateStation(station) {
+    const result = await api.updateStation(session.token, station);
+    await refreshStationsRoutesAndBuses();
+    return result.data;
+  }
+
+  async function setStationStatus(stationId, isActive) {
+    const result = await api.setStationStatus(session.token, stationId, isActive);
+    await refreshStationsRoutesAndBuses();
+    return result.data;
+  }
+
+  async function deleteStation(stationId) {
+    const result = await api.deleteStation(session.token, stationId);
+    await refreshStationsRoutesAndBuses();
     return result.data;
   }
 
   async function createBus(bus) {
     const result = await api.createBus(session.token, bus);
-    const refreshed = await api.buses(session.token);
-    setData((current) => ({ ...current, buses: refreshed.data.length ? refreshed.data : [...current.buses, result.data] }));
+    await refreshRoutesBusesAndTransactions();
     return result.data;
   }
 
   async function updateBus(busId, bus) {
     const result = await api.updateBus(session.token, busId, bus);
-    setData((current) => ({ ...current, buses: current.buses.map((item) => item.id === busId ? result.data : item) }));
+    await refreshRoutesBusesAndTransactions();
     return result.data;
   }
 
   async function changeBusRoute(busId, activeRouteId) {
     const result = await api.changeBusRoute(session.token, busId, activeRouteId);
-    setData((current) => ({
-      ...current,
-      buses: current.buses.map((item) => (item.id === result.data.id ? result.data : item))
-    }));
+    await refreshRoutesBusesAndTransactions();
+    return result.data;
+  }
+
+  async function setBusStatus(busId, isActive) {
+    const result = await api.setBusStatus(session.token, busId, isActive);
+    await refreshRoutesBusesAndTransactions();
+    return result.data;
+  }
+
+  async function deleteBus(busId) {
+    const result = await api.deleteBus(session.token, busId);
+    await refreshRoutesBusesAndTransactions();
+    return result.data;
+  }
+
+  async function createDriver(driver) {
+    const result = await api.createDriver(session.token, driver);
+    await refreshDriversTransactionsAndEvents();
+    return result.data;
+  }
+
+  async function updateDriver(driver) {
+    const result = await api.updateDriver(session.token, driver);
+    await refreshDriversTransactionsAndEvents();
+    return result.data;
+  }
+
+  async function setDriverStatus(driverId, isActive) {
+    const result = await api.setDriverStatus(session.token, driverId, isActive);
+    await refreshDriversTransactionsAndEvents();
+    return result.data;
+  }
+
+  async function deleteDriver(driverId) {
+    const result = await api.deleteDriver(session.token, driverId);
+    await refreshDriversTransactionsAndEvents();
+    return result.data;
+  }
+
+  async function assignDriverCard(driverId, card) {
+    const result = await api.assignDriverCard(session.token, driverId, card);
+    await refreshDriversTransactionsAndEvents();
+    return result.data;
+  }
+
+  async function setDriverCardStatus(cardNo, isActive) {
+    const result = await api.setDriverCardStatus(session.token, cardNo, isActive);
+    await refreshDriversTransactionsAndEvents();
+    return result.data;
+  }
+
+  async function deleteDriverCard(cardNo) {
+    const result = await api.deleteDriverCard(session.token, cardNo);
+    await refreshDriversTransactionsAndEvents();
     return result.data;
   }
 

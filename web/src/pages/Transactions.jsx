@@ -21,6 +21,17 @@ function routeLabel(row) {
   return code || name || "-";
 }
 
+function driverKey(row) {
+  return row.current_driver_id || row.current_driver_card_no || "";
+}
+
+function driverLabel(row) {
+  const name = row.current_driver_name_en || row.current_driver_name_ar || "";
+  const card = row.current_driver_card_no || "";
+  if (name && card) return `${name} · ${card}`;
+  return name || card || "-";
+}
+
 function compareDate(a, b, key) {
   return new Date(b[key] || 0) - new Date(a[key] || 0);
 }
@@ -33,6 +44,8 @@ function groupRows(rows, groupBy) {
         ? transactionDate(row)
         : groupBy === "current_route"
           ? routeLabel(row)
+          : groupBy === "current_driver"
+            ? driverLabel(row)
           : row[groupBy] || "__unassigned__";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
@@ -75,14 +88,23 @@ export function Transactions({ rows = [], t }) {
     { value: "device_id", labelKey: "device" },
     { value: "bus_number", labelKey: "busNumber" },
     { value: "current_route", labelKey: "currentRoute" },
-    { value: "current_driver_card_no", labelKey: "currentDriver" },
+    { value: "current_driver", labelKey: "currentDriver" },
     { value: "card_type", labelKey: "cardType" },
     { value: "date",      labelKey: "date" }
   ];
 
   const devices = useMemo(() => Array.from(new Set(rows.map((row) => row.device_id).filter(Boolean))).sort(), [rows]);
   const buses = useMemo(() => Array.from(new Set(rows.map((row) => row.bus_number).filter(Boolean))).sort(), [rows]);
-  const drivers = useMemo(() => Array.from(new Set(rows.map((row) => row.current_driver_card_no).filter(Boolean))).sort(), [rows]);
+  const drivers = useMemo(() => {
+    const options = new Map();
+    for (const row of rows) {
+      const value = driverKey(row);
+      if (value) options.set(value, driverLabel(row));
+    }
+    return Array.from(options.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows]);
   const routes = useMemo(() => {
     const options = new Map();
     for (const row of rows) {
@@ -107,6 +129,9 @@ export function Transactions({ rows = [], t }) {
           row.current_route_code,
           row.current_route_name,
           row.current_driver_card_no,
+          row.current_driver_name_en,
+          row.current_driver_name_ar,
+          row.current_driver_civil_id,
           row.record_uid,
           row.card_no,
           row.card_type,
@@ -117,7 +142,7 @@ export function Transactions({ rows = [], t }) {
         if (filters.device !== "all" && row.device_id !== filters.device) return false;
         if (filters.bus !== "all" && row.bus_number !== filters.bus) return false;
         if (filters.route !== "all" && routeKey(row) !== filters.route) return false;
-        if (filters.driver !== "all" && row.current_driver_card_no !== filters.driver) return false;
+        if (filters.driver !== "all" && driverKey(row) !== filters.driver) return false;
         if (filters.cardType !== "all" && row.card_type !== filters.cardType) return false;
         if (filters.from && transactionDate(row) < filters.from) return false;
         if (filters.to && transactionDate(row) > filters.to) return false;
@@ -131,7 +156,7 @@ export function Transactions({ rows = [], t }) {
         if (filters.sort === "device") return String(a.device_id || "").localeCompare(String(b.device_id || ""));
         if (filters.sort === "bus") return String(a.bus_number || "").localeCompare(String(b.bus_number || ""));
         if (filters.sort === "route") return routeLabel(a).localeCompare(routeLabel(b));
-        if (filters.sort === "driver") return String(a.current_driver_card_no || "").localeCompare(String(b.current_driver_card_no || ""));
+        if (filters.sort === "driver") return driverLabel(a).localeCompare(driverLabel(b));
         return compareDate(a, b, "received_at") || Number(b.id || 0) - Number(a.id || 0);
       });
   }, [filters, rows]);
@@ -198,7 +223,7 @@ export function Transactions({ rows = [], t }) {
           <span>{t("currentDriver")}</span>
           <select value={filters.driver} onChange={(event) => updateFilter("driver", event.target.value)}>
             <option value="all">{t("allDrivers")}</option>
-            {drivers.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
+            {drivers.map((driver) => <option key={driver.value} value={driver.value}>{driver.label}</option>)}
           </select>
         </label>
         <label className="field">
@@ -260,7 +285,7 @@ export function Transactions({ rows = [], t }) {
                 { key: "device_id", label: t("device") },
                 { key: "bus_number", label: t("busNumber"), render: (row) => row.bus_number || "-" },
                 { key: "current_route", label: t("currentRoute"), render: (row) => routeLabel(row) },
-                { key: "current_driver_card_no", label: t("currentDriver"), render: (row) => row.current_driver_card_no || "-" },
+                { key: "current_driver_card_no", label: t("currentDriver"), render: driverLabel },
                 { key: "record_uid", label: t("recordUid") },
                 { key: "card_no", label: t("card") },
                 { key: "card_type", label: t("type") },

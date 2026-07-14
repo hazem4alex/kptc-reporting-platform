@@ -27,12 +27,32 @@ export const api = {
   me: (token) => request("/api/auth/me", { token }),
   users: (token) => request("/api/users", { token }),
   createUser: (token, user) => request("/api/users", { method: "POST", token, body: user }),
+  drivers: (token) => request("/api/drivers", { token }),
+  createDriver: (token, driver) => request("/api/drivers", { method: "POST", token, body: driver }),
+  updateDriver: (token, driver) => request(`/api/drivers/${driver.id}`, { method: "PUT", token, body: driver }),
+  setDriverStatus: (token, driverId, isActive) =>
+    request(`/api/drivers/${driverId}/status`, { method: "PUT", token, body: { is_active: isActive } }),
+  deleteDriver: (token, driverId) => request(`/api/drivers/${driverId}`, { method: "DELETE", token }),
+  assignDriverCard: (token, driverId, card) => request(`/api/drivers/${driverId}/cards`, { method: "POST", token, body: card }),
+  setDriverCardStatus: (token, cardNo, isActive) =>
+    request(`/api/driver-cards/${encodeURIComponent(cardNo)}/status`, { method: "PUT", token, body: { is_active: isActive } }),
+  deleteDriverCard: (token, cardNo) => request(`/api/driver-cards/${encodeURIComponent(cardNo)}`, { method: "DELETE", token }),
+  stations: (token) => request("/api/stations", { token }),
+  createStation: (token, station) => request("/api/stations", { method: "POST", token, body: station }),
+  updateStation: (token, station) => request(`/api/stations/${station.id}`, { method: "PUT", token, body: station }),
+  setStationStatus: (token, stationId, isActive) =>
+    request(`/api/stations/${stationId}/status`, { method: "PUT", token, body: { is_active: isActive } }),
+  deleteStation: (token, stationId) => request(`/api/stations/${stationId}`, { method: "DELETE", token }),
   routes: (token) => request("/api/routes", { token }),
   createRoute: (token, route) => request("/api/routes", { method: "POST", token, body: route }),
   updateRoute: (token, route) => request(`/api/routes/${route.id}`, { method: "PUT", token, body: route }),
+  deleteRoute: (token, routeId) => request(`/api/routes/${routeId}`, { method: "DELETE", token }),
   buses: (token) => request("/api/buses", { token }),
   createBus: (token, bus) => request("/api/buses", { method: "POST", token, body: bus }),
   updateBus: (token, busId, bus) => request(`/api/buses/${busId}`, { method: "PUT", token, body: bus }),
+  setBusStatus: (token, busId, isActive) =>
+    request(`/api/buses/${busId}/status`, { method: "PUT", token, body: { is_active: isActive } }),
+  deleteBus: (token, busId) => request(`/api/buses/${busId}`, { method: "DELETE", token }),
   changeBusRoute: (token, busId, activeRouteId) =>
     request(`/api/buses/${busId}/active-route`, {
       method: "PUT",

@@ -5,7 +5,7 @@ import { dateTime } from "../format.js";
 const routeLabel = (r) => `${r.route_code} · ${r.route_name}`;
 const fare = (value) => value == null ? "—" : `${(Number(value) / 1000).toFixed(3)} KWD`;
 
-export function BusesManagement({ rows = [], routes = [], onCreateBus, onUpdateBus, onChangeRoute, t }) {
+export function BusesManagement({ rows = [], routes = [], isAdmin, onCreateBus, onUpdateBus, onChangeRoute, onSetBusStatus, onDeleteBus, t }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
@@ -41,6 +41,13 @@ export function BusesManagement({ rows = [], routes = [], onCreateBus, onUpdateB
     catch (err) { setError(err.message); }
   }
 
+  async function deleteBus(row) {
+    if (!window.confirm(t("confirmDelete"))) return;
+    setError(""); setNotice("");
+    try { await onDeleteBus(row.id); }
+    catch (err) { setError(err.message); }
+  }
+
   const jsonFor = (row) => ({ success: true, device_id: row.device_id, bus_id: row.id,
     bus_number: row.bus_number || row.bus_code, version: row.route_config_version,
     route_id: row.active_route_id, route_code: row.active_route_code || row.route_code,
@@ -67,8 +74,9 @@ export function BusesManagement({ rows = [], routes = [], onCreateBus, onUpdateB
           { key: "device_id", label: t("deviceId") }, { key: "bus_number", label: t("busNumber"), render: (r) => r.bus_number || r.bus_code },
           { key: "route_name", label: t("activeRoute"), render: (r) => r.active_route_name || r.route_name || "—" },
           { key: "fare_kwd", label: t("fare"), render: (r) => <span className="fare-stack"><strong>{fare(r.fare_fils)}</strong>{r.fare_fils != null && <small>{r.fare_fils} fils</small>}</span> },
+          { key: "is_active", label: t("status"), render: (r) => <span className={r.is_active ? "status-pill active" : "status-pill inactive"}>{r.is_active ? t("active") : t("inactive")}</span> },
           { key: "route_config_version", label: t("configVersion") }, { key: "updated_at", label: t("updated"), render: (r) => dateTime(r.updated_at) },
-          { key: "actions", label: t("actions"), render: (r) => <div className="bus-actions"><select aria-label={t("assignActiveRoute")} value={r.active_route_id || ""} onChange={(e) => e.target.value && assign(r, e.target.value)}><option disabled value="">{t("unassigned")}</option>{routes.filter((x) => x.is_active || x.id === r.active_route_id).map((x) => <option key={x.id} value={x.id}>{routeLabel(x)}</option>)}</select><div className="inline-actions compact-actions"><button className="small-action" onClick={() => setEditing(r)} type="button">{t("edit")}</button><button className="small-action muted-action" onClick={() => setDetails(jsonFor(r))} type="button">JSON</button></div></div> }
+          { key: "actions", label: t("actions"), render: (r) => <div className="bus-actions"><select aria-label={t("assignActiveRoute")} value={r.active_route_id || ""} onChange={(e) => e.target.value && assign(r, e.target.value)} disabled={!r.is_active}><option disabled value="">{t("unassigned")}</option>{routes.filter((x) => x.is_active || x.id === r.active_route_id).map((x) => <option key={x.id} value={x.id}>{routeLabel(x)}</option>)}</select><div className="inline-actions compact-actions"><button className="small-action" onClick={() => setEditing(r)} type="button">{t("edit")}</button><button className="small-action muted-action" onClick={() => setDetails(jsonFor(r))} type="button">JSON</button>{isAdmin && <button className="small-action muted-action" type="button" onClick={() => onSetBusStatus(r.id, !r.is_active)}>{r.is_active ? t("deactivate") : t("activate")}</button>}{isAdmin && <button className="small-action danger-action" type="button" onClick={() => deleteBus(r)}>{t("delete")}</button>}</div></div> }
         ]} />
       </section>
     </div>
