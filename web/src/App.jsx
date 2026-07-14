@@ -221,6 +221,8 @@ export default function App() {
           cardTypes,
           driverEvents,
           locations,
+          topRoutes,
+          topStations,
           drivers,
           stations,
           appUsers
@@ -233,6 +235,8 @@ export default function App() {
           api.cardTypes(session.token),
           api.driverEvents(),
           api.locations(),
+          api.topRoutes(),
+          api.topStations(),
           api.drivers(session.token),
           api.stations(session.token),
           api.users(session.token)
@@ -252,6 +256,8 @@ export default function App() {
             cardTypes: cardTypes.data,
             driverEvents: driverEvents.data,
             locations: locations.data,
+            topRoutes: topRoutes.data,
+            topStations: topStations.data,
             drivers: drivers.data,
             stations: stations.data,
             routes: routes.data,

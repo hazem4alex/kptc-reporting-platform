@@ -60,8 +60,11 @@ function sum(rows, key) {
 export function Overview({ data, t }) {
   const summary = data.summary || {};
   const daily = data.daily || [];
-  const cardTypes = data.financialCardTypes || data.cardTypes || [];
   const devices = data.devices || [];
+  const drivers = data.drivers || [];
+  const stations = data.stations || [];
+  const topRoutes = data.topRoutes || [];
+  const topStations = data.topStations || [];
   const transactions = data.transactions || [];
 
   const [preset, setPreset] = useState("all");
@@ -77,6 +80,9 @@ export function Overview({ data, t }) {
   const displayedTrips = daily.length ? trips : Number(summary.total_transactions || 0);
   const displayedRevenue = daily.length ? revenue : Number(summary.total_revenue_kwd || 0);
   const activeDevices = devices.filter((device) => device.last_seen_at).length;
+  const displayedActiveDevices = devices.length ? activeDevices : Number(summary.active_devices || 0);
+  const activeDrivers = drivers.filter((driver) => driver.is_active !== false).length;
+  const activeStations = stations.filter((station) => station.is_active !== false).length;
   const avgFare = trips ? revenue / trips : 0;
   const peakDay = filteredDaily.reduce(
     (top, row) => (Number(row.revenue_kwd || 0) > Number(top.revenue_kwd || 0) ? row : top),
@@ -153,29 +159,49 @@ export function Overview({ data, t }) {
           <KpiCard label={t("peakRevenueDay")} value={peakDay.date ? day(peakDay.date) : "-"} tone="red" />
         </div>
         <div className="col-12 col-sm-6 col-md-4 col-xl">
-          <KpiCard label={t("activeDevices")} value={count(activeDevices || summary.active_devices)} />
+          <KpiCard label={t("activeDevices")} value={count(displayedActiveDevices)} />
+        </div>
+        <div className="col-12 col-sm-6 col-md-4 col-xl">
+          <KpiCard label={t("activeDrivers")} value={count(activeDrivers)} tone="green" />
+        </div>
+        <div className="col-12 col-sm-6 col-md-4 col-xl">
+          <KpiCard label={t("activeStations")} value={count(activeStations)} tone="blue" />
         </div>
       </div>
 
       <div className="row g-3">
-        <div className="col-12 col-md-6 col-xxl-3">
+        <div className="col-12 col-xl-6">
           <Panel title={t("revenueTrend")} meta={t("dailyKwd")}>
             <BarChart rows={filteredDaily.slice(0, 12).reverse()} />
           </Panel>
         </div>
-        <div className="col-12 col-md-6 col-xxl-3">
-          <Panel title={t("cardMix")} meta={t("shareByTransactions")}>
-            <DonutChart rows={cardTypes.slice(0, 5)} />
+        <div className="col-12 col-xl-6">
+          <Panel title={t("fleetGauge")} meta={`${count(displayedActiveDevices)} ${t("reportingDevices")}`}>
+            <Gauge value={devices.length ? Math.round((displayedActiveDevices / devices.length) * 100) : 0} />
           </Panel>
         </div>
-        <div className="col-12 col-md-6 col-xxl-3">
-          <Panel title={t("revenueSplit")} meta={t("topFareCategories")}>
-            <PieChart rows={cardTypes.slice(0, 5)} revenueLabel={t("revenue")} />
+        <div className="col-12 col-xl-6">
+          <Panel title={t("topStationsByRevenue")} meta={t("top10ByRevenue")}>
+            <RankedRevenueChart
+              rows={topStations}
+              getKey={(row) => row.station_id || row.name_en || row.name_ar}
+              getLabel={(row) => row.name_en || row.name_ar || t("stationUnavailable")}
+              t={t}
+            />
           </Panel>
         </div>
-        <div className="col-12 col-md-6 col-xxl-3">
-          <Panel title={t("fleetGauge")} meta={`${count(activeDevices)} ${t("reportingDevices")}`}>
-            <Gauge value={devices.length ? Math.round((activeDevices / devices.length) * 100) : 0} />
+        <div className="col-12 col-xl-6">
+          <Panel title={t("topRoutesByRevenue")} meta={t("top10ByRevenue")}>
+            <RankedRevenueChart
+              rows={topRoutes}
+              getKey={(row) => row.route_id || row.route_code || row.route_name}
+              getLabel={(row) => {
+                const code = row.route_code || "";
+                const name = row.route_name || t("unassigned");
+                return code && name !== code ? `${code} — ${name}` : name;
+              }}
+              t={t}
+            />
           </Panel>
         </div>
       </div>
@@ -245,74 +271,6 @@ function BarChart({ rows }) {
   );
 }
 
-function DonutChart({ rows }) {
-  const total = Math.max(sum(rows, "transaction_count"), 1);
-  let offset = 25;
-
-  return (
-    <div className="donut-layout">
-      <svg className="donut-chart" viewBox="0 0 42 42" role="img" aria-label="Card type transaction mix">
-        <circle className="donut-base" cx="21" cy="21" r="15.915" />
-        {rows.map((row, index) => {
-          const value = (Number(row.transaction_count || 0) / total) * 100;
-          const dash = `${value} ${100 - value}`;
-          const currentOffset = offset;
-          offset -= value;
-          return (
-            <circle
-              className={`donut-segment segment-${index + 1}`}
-              cx="21"
-              cy="21"
-              key={row.card_type}
-              r="15.915"
-              strokeDasharray={dash}
-              strokeDashoffset={currentOffset}
-            />
-          );
-        })}
-      </svg>
-      <div className="chart-legend">
-        {rows.map((row, index) => (
-          <span key={row.card_type}>
-            <i className={`legend-dot segment-bg-${index + 1}`} />
-            {row.card_type} · {count(row.transaction_count)}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PieChart({ rows, revenueLabel }) {
-  const total = Math.max(sum(rows, "revenue_kwd"), 1);
-  let cumulative = 0;
-  const gradient = rows
-    .map((row, index) => {
-      const value = (Number(row.revenue_kwd || 0) / total) * 100;
-      const start = cumulative;
-      cumulative += value;
-      return `var(--segment-${index + 1}) ${start}% ${cumulative}%`;
-    })
-    .join(", ");
-
-  return (
-    <div className="pie-layout">
-      <div className="pie-chart" style={{ background: `conic-gradient(${gradient || "var(--line) 0 100%"})` }}>
-        <strong>{kwd(total)}</strong>
-        <span>{revenueLabel}</span>
-      </div>
-      <div className="chart-legend">
-        {rows.map((row, index) => (
-          <span key={row.card_type}>
-            <i className={`legend-dot segment-bg-${index + 1}`} />
-            {row.card_type} · {kwd(row.revenue_kwd)}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function Gauge({ value }) {
   const clamped = Math.max(0, Math.min(100, Number(value || 0)));
 
@@ -329,6 +287,39 @@ function Gauge({ value }) {
         <span>50</span>
         <span>100</span>
       </div>
+    </div>
+  );
+}
+
+function RankedRevenueChart({ rows, getKey, getLabel, t }) {
+  const visibleRows = rows.slice(0, 10);
+  const max = Math.max(...visibleRows.map((row) => Number(row.revenue_kwd || 0)), 1);
+
+  if (!visibleRows.length) {
+    return <div className="empty-chart">{t("noRevenueData")}</div>;
+  }
+
+  return (
+    <div className="ranked-chart">
+      {visibleRows.map((row, index) => {
+        const revenue = Number(row.revenue_kwd || 0);
+        const width = Math.max(4, (revenue / max) * 100);
+        return (
+          <div className="ranked-row" key={getKey(row) || index}>
+            <span className="ranked-index">{String(index + 1).padStart(2, "0")}</span>
+            <div className="ranked-main">
+              <div className="ranked-label">
+                <strong>{getLabel(row)}</strong>
+                <span>{count(row.transaction_count)} {t("trips")}</span>
+              </div>
+              <div className="ranked-track">
+                <span style={{ width: `${width}%` }} />
+              </div>
+            </div>
+            <strong className="ranked-value">{kwd(revenue)}</strong>
+          </div>
+        );
+      })}
     </div>
   );
 }

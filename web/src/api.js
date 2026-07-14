@@ -62,6 +62,8 @@ export const api = {
   summary: () => request("/api/reports/summary"),
   daily: () => request("/api/reports/daily"),
   devices: () => request("/api/reports/devices"),
+  topRoutes: () => request("/api/reports/top-routes"),
+  topStations: () => request("/api/reports/top-stations"),
   latestTransactions: (params = {}) => {
     const search = new URLSearchParams({ limit: "100", offset: "0", ...params });
     return request(`/api/reports/transactions?${search.toString()}`);

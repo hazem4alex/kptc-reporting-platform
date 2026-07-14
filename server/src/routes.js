@@ -149,6 +149,8 @@ router.get("/", (req, res) => {
       summary: "/api/reports/summary",
       daily: "/api/reports/daily",
       devices: "/api/reports/devices",
+      topRoutes: "/api/reports/top-routes",
+      topStations: "/api/reports/top-stations",
       transactions: "/api/reports/transactions",
       cardTypes: "/api/reports/card-types",
       driverEvents: "/api/reports/driver-events",
@@ -1546,6 +1548,98 @@ router.get("/api/reports/devices", async (req, res, next) => {
       LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
       GROUP BY d.device_id
       ORDER BY d.last_seen_at DESC NULLS LAST, d.device_id ASC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/api/reports/top-routes", async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COALESCE(b.active_route_id, d.route_no, 'UNASSIGNED') AS route_id,
+        COALESCE(r.route_code, d.route_no, 'UNASSIGNED') AS route_code,
+        COALESCE(r.route_name, d.route_name, 'Unassigned') AS route_name,
+        COUNT(t.id)::bigint AS transaction_count,
+        COALESCE(SUM(t.amount_display_kwd), 0)::numeric(14,3) AS revenue_kwd
+      FROM transactions t
+      LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+      LEFT JOIN devices d ON d.device_id = t.device_id
+      LEFT JOIN buses b ON b.device_id = t.device_id AND b.deleted_at IS NULL
+      LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+      WHERE NOT COALESCE(c.is_driver_card, false)
+      GROUP BY
+        COALESCE(b.active_route_id, d.route_no, 'UNASSIGNED'),
+        COALESCE(r.route_code, d.route_no, 'UNASSIGNED'),
+        COALESCE(r.route_name, d.route_name, 'Unassigned')
+      ORDER BY revenue_kwd DESC, transaction_count DESC, route_name ASC
+      LIMIT 10
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/api/reports/top-stations", async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      WITH financial_scans AS (
+        SELECT
+          t.id,
+          t.amount_display_kwd,
+          t.scan_lat::double precision AS scan_lat,
+          t.scan_lng::double precision AS scan_lng
+        FROM transactions t
+        LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+        WHERE NOT COALESCE(c.is_driver_card, false)
+          AND t.scan_lat IS NOT NULL
+          AND t.scan_lng IS NOT NULL
+      ),
+      nearest AS (
+        SELECT
+          fs.id,
+          fs.amount_display_kwd,
+          station.id AS station_id,
+          station.name_en,
+          station.name_ar
+        FROM financial_scans fs
+        CROSS JOIN LATERAL (
+          SELECT
+            s.id,
+            s.name_en,
+            s.name_ar,
+            6371000 * 2 * asin(
+              LEAST(1, sqrt(
+                power(sin(radians((s.latitude::double precision - fs.scan_lat) / 2)), 2) +
+                cos(radians(fs.scan_lat)) *
+                cos(radians(s.latitude::double precision)) *
+                power(sin(radians((s.longitude::double precision - fs.scan_lng) / 2)), 2)
+              ))
+            ) AS distance_meters
+          FROM stations s
+          WHERE s.deleted_at IS NULL
+            AND s.is_active = true
+            AND s.latitude IS NOT NULL
+            AND s.longitude IS NOT NULL
+          ORDER BY distance_meters ASC
+          LIMIT 1
+        ) station
+      )
+      SELECT
+        station_id,
+        name_en,
+        name_ar,
+        COUNT(id)::bigint AS transaction_count,
+        COALESCE(SUM(amount_display_kwd), 0)::numeric(14,3) AS revenue_kwd
+      FROM nearest
+      GROUP BY station_id, name_en, name_ar
+      ORDER BY revenue_kwd DESC, transaction_count DESC, name_en ASC
+      LIMIT 10
     `);
 
     res.json({ success: true, data: result.rows });

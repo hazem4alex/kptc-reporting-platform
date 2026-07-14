@@ -1244,6 +1244,95 @@ select:focus {
   text-align: center;
 }
 
+.ranked-chart {
+  display: grid;
+  gap: 10px;
+  min-height: 230px;
+}
+
+.ranked-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.ranked-index {
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranked-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ranked-label {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.ranked-label strong {
+  color: var(--ink);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranked-label span {
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ranked-track {
+  background: rgba(0, 229, 200, 0.05);
+  border: 1px solid rgba(0, 229, 200, 0.07);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.ranked-track span {
+  background: linear-gradient(90deg, rgba(0, 229, 200, 0.36), rgba(0, 229, 200, 0.9));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.ranked-value {
+  color: var(--accent);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  text-align: right;
+}
+
+.empty-chart {
+  align-items: center;
+  color: var(--muted);
+  display: grid;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  min-height: 230px;
+  place-content: center;
+  text-align: center;
+}
+
 /* 24. Donut chart ------------------------------------------- */
 .donut-layout,
 .pie-layout {
