@@ -13,6 +13,9 @@ const routeId = `R${routeCode}`;
 const secondRouteId = `RX${suffix}`;
 const deviceId = `9001${suffix}`;
 const busNumber = `9002${suffix}`;
+const driverCardType = `D${suffix}`;
+const driverLoginUid = `driver-login-${suffix}`;
+const driverLogoutUid = `driver-logout-${suffix}`;
 
 async function call(path, { method = "GET", body, auth = true, apiKey } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -45,6 +48,7 @@ after(async () => {
   await pool.query("DELETE FROM route_change_logs WHERE bus_id = $1", [busNumber]).catch(() => {});
   await pool.query("DELETE FROM transactions WHERE device_id = $1", [deviceId]).catch(() => {});
   await pool.query("DELETE FROM sync_batches WHERE device_id = $1", [deviceId]).catch(() => {});
+  await pool.query("DELETE FROM card_type_definitions WHERE card_type = $1", [driverCardType]).catch(() => {});
   await pool.query("DELETE FROM buses WHERE id = $1", [busNumber]).catch(() => {});
   await pool.query("DELETE FROM devices WHERE device_id = $1", [deviceId]).catch(() => {});
   await pool.query("DELETE FROM routes WHERE id IN ($1,$2)", [routeId, secondRouteId]).catch(() => {});
@@ -98,5 +102,53 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     const first = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
     const duplicate = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
     assert.equal(first.response.status, 201); assert.equal(first.json.accepted, 1); assert.equal(duplicate.json.duplicates, 1);
+  });
+
+  await t.test("driver card types are excluded from financial transactions and exposed as driver events", async () => {
+    const cardType = await call(`/api/card-types/${driverCardType}`, {
+      method: "PUT",
+      body: { is_driver_card: true }
+    });
+    assert.equal(cardType.response.status, 200);
+    assert.equal(cardType.json.data.is_driver_card, true);
+
+    const payload = {
+      device_id: deviceId,
+      source_file: "driver-events-test",
+      transactions: [
+        {
+          record_uid: driverLoginUid,
+          card_no: "DRIVER001",
+          card_type: driverCardType,
+          record_type: "44",
+          amount_raw: 0,
+          amount_display_kwd: "0.000",
+          transaction_datetime_raw: "20260712070000"
+        },
+        {
+          record_uid: driverLogoutUid,
+          card_no: "DRIVER001",
+          card_type: driverCardType,
+          record_type: "43",
+          amount_raw: 0,
+          amount_display_kwd: "0.000",
+          transaction_datetime_raw: "20260712090000"
+        }
+      ]
+    };
+
+    const upload = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
+    assert.equal(upload.response.status, 201);
+    assert.equal(upload.json.accepted, 2);
+
+    const financial = await call(`/api/reports/transactions?limit=100&offset=0&device_id=${deviceId}`, { auth: false });
+    assert.equal(financial.response.status, 200);
+    assert.equal(financial.json.data.some((row) => row.record_uid === driverLoginUid || row.record_uid === driverLogoutUid), false);
+
+    const events = await call("/api/reports/driver-events?limit=1000", { auth: false });
+    assert.equal(events.response.status, 200);
+    const byUid = new Map(events.json.data.map((row) => [row.record_uid, row]));
+    assert.equal(byUid.get(driverLoginUid)?.event_type, "login");
+    assert.equal(byUid.get(driverLogoutUid)?.event_type, "logout");
   });
 });

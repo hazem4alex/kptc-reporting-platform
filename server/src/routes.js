@@ -70,6 +70,7 @@ router.get("/", (req, res) => {
       devices: "/api/reports/devices",
       transactions: "/api/reports/transactions",
       cardTypes: "/api/reports/card-types",
+      driverEvents: "/api/reports/driver-events",
       latestBusLocations: "/api/reports/bus-locations/latest"
     }
   });
@@ -186,6 +187,59 @@ router.post("/api/users", requireAuth, async (req, res, next) => {
   }
 });
 
+router.get("/api/card-types", requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        d.card_type,
+        d.is_driver_card,
+        COUNT(t.id)::bigint AS transaction_count,
+        COUNT(t.id) FILTER (WHERE t.record_type IN ('43', '44'))::bigint AS driver_event_count,
+        COALESCE(
+          SUM(t.amount_display_kwd) FILTER (WHERE NOT d.is_driver_card),
+          0
+        )::numeric(14,3) AS revenue_kwd,
+        d.created_at,
+        d.updated_at
+      FROM card_type_definitions d
+      LEFT JOIN transactions t ON t.card_type = d.card_type
+      GROUP BY d.card_type, d.is_driver_card, d.created_at, d.updated_at
+      ORDER BY d.card_type ASC
+    `);
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put("/api/card-types/:cardType", requireAuth, async (req, res, next) => {
+  try {
+    const cardType = requiredString(req.params.cardType, "card_type");
+    if (typeof req.body?.is_driver_card !== "boolean") {
+      const err = new Error("is_driver_card must be a boolean");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const result = await pool.query(
+      `
+        INSERT INTO card_type_definitions (card_type, is_driver_card)
+        VALUES ($1, $2)
+        ON CONFLICT (card_type) DO UPDATE SET
+          is_driver_card = EXCLUDED.is_driver_card,
+          updated_at = now()
+        RETURNING card_type, is_driver_card, created_at, updated_at
+      `,
+      [cardType, req.body.is_driver_card]
+    );
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
   const client = await pool.connect();
 
@@ -220,6 +274,17 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
 
     for (const tx of transactions) {
       const recordUid = requiredString(tx.record_uid, "transactions[].record_uid");
+      const cardType = tx.card_type == null ? null : String(tx.card_type).trim() || null;
+      if (cardType) {
+        await client.query(
+          `
+            INSERT INTO card_type_definitions (card_type)
+            VALUES ($1)
+            ON CONFLICT (card_type) DO NOTHING
+          `,
+          [cardType]
+        );
+      }
       const result = await client.query(
         `
           INSERT INTO transactions (
@@ -242,7 +307,7 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
           parseNumeric(tx.record_index),
           tx.sequence_no ?? null,
           tx.card_no ?? null,
-          tx.card_type ?? null,
+          cardType,
           tx.card_expiry ?? null,
           tx.counter ?? null,
           parseNumeric(tx.balance_raw),
@@ -770,10 +835,12 @@ router.get("/api/reports/summary", async (req, res, next) => {
     const result = await pool.query(`
       WITH normalized AS (
         SELECT
-          amount_display_kwd,
-          transaction_datetime,
+          t.amount_display_kwd,
+          t.transaction_datetime,
           ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
-        FROM transactions
+        FROM transactions t
+        LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+        WHERE NOT COALESCE(c.is_driver_card, false)
       )
       SELECT
         COUNT(*)::bigint AS total_transactions,
@@ -803,9 +870,11 @@ router.get("/api/reports/daily", async (req, res, next) => {
       `
         WITH normalized AS (
           SELECT
-            amount_display_kwd,
+            t.amount_display_kwd,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
-          FROM transactions
+          FROM transactions t
+          LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+          WHERE NOT COALESCE(c.is_driver_card, false)
         )
         SELECT
           to_char(transaction_datetime_kuwait_ts::date, 'YYYY-MM-DD') AS date,
@@ -837,11 +906,15 @@ router.get("/api/reports/devices", async (req, res, next) => {
         d.route_name,
         d.route_extra,
         d.last_seen_at,
-        COUNT(t.id)::bigint AS total_transactions,
-        COALESCE(SUM(t.amount_display_kwd), 0)::numeric(14,3) AS total_revenue_kwd,
-        MAX(t.transaction_datetime) AS last_transaction_at
+        COUNT(t.id) FILTER (WHERE NOT COALESCE(c.is_driver_card, false))::bigint AS total_transactions,
+        COALESCE(
+          SUM(t.amount_display_kwd) FILTER (WHERE NOT COALESCE(c.is_driver_card, false)),
+          0
+        )::numeric(14,3) AS total_revenue_kwd,
+        MAX(t.transaction_datetime) FILTER (WHERE NOT COALESCE(c.is_driver_card, false)) AS last_transaction_at
       FROM devices d
       LEFT JOIN transactions t ON t.device_id = d.device_id
+      LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
       GROUP BY d.device_id
       ORDER BY d.last_seen_at DESC NULLS LAST, d.device_id ASC
     `);
@@ -862,12 +935,14 @@ router.get("/api/reports/transactions", async (req, res, next) => {
       `
         WITH normalized AS (
           SELECT
-            id, record_uid, device_id, record_index, sequence_no, card_no, card_type,
-            card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
-            amount_display_kwd, amount_copy_raw, transaction_datetime,
-            transaction_datetime_raw, record_type, sub_type, crc, source_file, received_at,
+            t.id, t.record_uid, t.device_id, t.record_index, t.sequence_no, t.card_no, t.card_type,
+            t.card_expiry, t.counter, t.balance_raw, t.balance_display_kwd, t.amount_raw,
+            t.amount_display_kwd, t.amount_copy_raw, t.transaction_datetime,
+            t.transaction_datetime_raw, t.record_type, t.sub_type, t.crc, t.source_file, t.received_at,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
-          FROM transactions
+          FROM transactions t
+          LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+          WHERE NOT COALESCE(c.is_driver_card, false)
         )
         SELECT
           id, record_uid, device_id, record_index, sequence_no, card_no, card_type,
@@ -891,10 +966,12 @@ router.get("/api/reports/transactions", async (req, res, next) => {
       `
         WITH normalized AS (
           SELECT
-            device_id,
-            card_no,
+            t.device_id,
+            t.card_no,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
-          FROM transactions
+          FROM transactions t
+          LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+          WHERE NOT COALESCE(c.is_driver_card, false)
         )
         SELECT COUNT(*)::bigint AS total
         FROM normalized
@@ -930,15 +1007,81 @@ router.get("/api/reports/card-types", async (req, res, next) => {
   try {
     const result = await pool.query(`
       SELECT
-        COALESCE(card_type, 'unknown') AS card_type,
+        COALESCE(t.card_type, 'unknown') AS card_type,
         COUNT(*)::bigint AS transaction_count,
-        COALESCE(SUM(amount_display_kwd), 0)::numeric(14,3) AS revenue_kwd
-      FROM transactions
-      GROUP BY COALESCE(card_type, 'unknown')
+        COALESCE(SUM(t.amount_display_kwd), 0)::numeric(14,3) AS revenue_kwd
+      FROM transactions t
+      LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+      WHERE NOT COALESCE(c.is_driver_card, false)
+      GROUP BY COALESCE(t.card_type, 'unknown')
       ORDER BY transaction_count DESC, card_type ASC
     `);
 
     res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/api/reports/driver-events", async (req, res, next) => {
+  try {
+    const limit = parsePositiveInt(req.query.limit, 200, 1000);
+    const result = await pool.query(
+      `
+        WITH normalized AS (
+          SELECT
+            t.id,
+            t.record_uid,
+            t.device_id,
+            t.card_no,
+            t.card_type,
+            t.record_type,
+            t.sub_type,
+            t.transaction_datetime,
+            t.transaction_datetime_raw,
+            t.received_at,
+            ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
+          FROM transactions t
+          INNER JOIN card_type_definitions c
+            ON c.card_type = t.card_type AND c.is_driver_card = true
+          WHERE t.record_type IN ('43', '44')
+        )
+        SELECT
+          n.id,
+          n.record_uid,
+          n.device_id,
+          COALESCE(b.bus_code, d.bus_no) AS bus_number,
+          d.route_no,
+          d.route_name,
+          n.card_no,
+          n.card_type,
+          CASE n.record_type
+            WHEN '44' THEN 'login'
+            WHEN '43' THEN 'logout'
+          END AS event_type,
+          n.record_type,
+          n.sub_type,
+          n.transaction_datetime,
+          n.transaction_datetime_raw,
+          to_char(n.transaction_datetime_kuwait_ts, 'YYYY-MM-DD HH24:MI:SS') AS transaction_datetime_kuwait,
+          n.received_at
+        FROM normalized n
+        LEFT JOIN devices d ON d.device_id = n.device_id
+        LEFT JOIN buses b ON b.device_id = n.device_id
+        ORDER BY n.id DESC
+        LIMIT $1
+      `,
+      [limit]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows.map((row) => ({
+        ...row,
+        transaction_datetime_kuwait:
+          row.transaction_datetime_kuwait || parseRawWithOffset(row.transaction_datetime_raw, deviceTimeOffsetHours)
+      }))
+    });
   } catch (err) {
     next(err);
   }

@@ -5,6 +5,7 @@ import { createTranslator } from "./i18n.js";
 import { CardTypes } from "./pages/CardTypes.jsx";
 import { BusesManagement } from "./pages/BusesManagement.jsx";
 import { Devices } from "./pages/Devices.jsx";
+import { DriverEvents } from "./pages/DriverEvents.jsx";
 import { LiveMap } from "./pages/LiveMap.jsx";
 import { Login } from "./pages/Login.jsx";
 import { Overview } from "./pages/Overview.jsx";
@@ -83,6 +84,18 @@ function Icon({ name }) {
       </svg>
     );
   }
+  if (name === "driver-events") {
+    return (
+      <svg {...props}>
+        <circle cx="8" cy="8" r="3" />
+        <path d="M3 19c0-3 2.2-5 5-5s5 2 5 5" />
+        <path d="M16 7h5l-2-2" />
+        <path d="M21 7l-2 2" />
+        <path d="M21 17h-5l2 2" />
+        <path d="M16 17l2-2" />
+      </svg>
+    );
+  }
   if (name === "live-map") {
     return (
       <svg {...props}>
@@ -111,6 +124,7 @@ const nav = [
   { id: "routes",       label: "routes"       },
   { id: "buses",        label: "buses"        },
   { id: "card-types",   label: "cardTypes"    },
+  { id: "driver-events", label: "driverLoginLogout" },
   { id: "live-map",     label: "liveMap"      },
   { id: "users",        label: "users"        }
 ];
@@ -175,12 +189,24 @@ export default function App() {
 
     async function load() {
       try {
-        const [summary, daily, devices, transactions, cardTypes, locations, appUsers] = await Promise.all([
+        const [
+          summary,
+          daily,
+          devices,
+          transactions,
+          financialCardTypes,
+          cardTypes,
+          driverEvents,
+          locations,
+          appUsers
+        ] = await Promise.all([
           api.summary(),
           api.daily(),
           api.devices(),
           api.latestTransactions(),
-          api.cardTypes(),
+          api.financialCardTypes(),
+          api.cardTypes(session.token),
+          api.driverEvents(),
           api.locations(),
           api.users(session.token)
         ]);
@@ -195,7 +221,9 @@ export default function App() {
             daily: daily.data,
             devices: devices.data,
             transactions: transactions.data,
+            financialCardTypes: financialCardTypes.data,
             cardTypes: cardTypes.data,
+            driverEvents: driverEvents.data,
             locations: locations.data,
             routes: routes.data,
             buses: buses.data
@@ -236,7 +264,8 @@ export default function App() {
         />
       );
     }
-    if (active === "card-types") return <CardTypes rows={data.cardTypes} t={t} />;
+    if (active === "card-types") return <CardTypes rows={data.cardTypes} t={t} onUpdateCardType={updateCardType} />;
+    if (active === "driver-events") return <DriverEvents rows={data.driverEvents} t={t} />;
     if (active === "live-map") return <LiveMap rows={data.locations} t={t} />;
     if (active === "users") return <Users rows={users} t={t} onCreateUser={createUser} />;
     return <Overview data={data} t={t} />;
@@ -307,6 +336,30 @@ export default function App() {
     setData((current) => ({
       ...current,
       buses: current.buses.map((item) => (item.id === result.data.id ? result.data : item))
+    }));
+    return result.data;
+  }
+
+  async function updateCardType(cardType, isDriverCard) {
+    const result = await api.updateCardType(session.token, cardType, isDriverCard);
+    const [summary, daily, devices, transactions, financialCardTypes, cardTypes, driverEvents] = await Promise.all([
+      api.summary(),
+      api.daily(),
+      api.devices(),
+      api.latestTransactions(),
+      api.financialCardTypes(),
+      api.cardTypes(session.token),
+      api.driverEvents()
+    ]);
+    setData((current) => ({
+      ...current,
+      summary: summary.data,
+      daily: daily.data,
+      devices: devices.data,
+      transactions: transactions.data,
+      financialCardTypes: financialCardTypes.data,
+      cardTypes: cardTypes.data,
+      driverEvents: driverEvents.data
     }));
     return result.data;
   }

@@ -60,7 +60,7 @@ function sum(rows, key) {
 export function Overview({ data, t }) {
   const summary = data.summary || {};
   const daily = data.daily || [];
-  const cardTypes = data.cardTypes || [];
+  const cardTypes = data.financialCardTypes || data.cardTypes || [];
   const devices = data.devices || [];
   const transactions = data.transactions || [];
 

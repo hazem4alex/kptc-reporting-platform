@@ -7,6 +7,7 @@ export const translations = {
     routes: "Routes",
     buses: "Buses",
     cardTypes: "Card Types",
+    driverLoginLogout: "Driver Login/Logout",
     liveMap: "Live Map",
     users: "Users",
 
@@ -136,6 +137,26 @@ export const translations = {
     // Card types
     fareMedia: "Fare media",
     transactionCount: "Transactions",
+    cardPurpose: "Card purpose",
+    driverCard: "Driver card",
+    fareCard: "Fare card",
+    driverEvents: "Driver events",
+    markAsFareCard: "Mark as fare card",
+    markAsDriverCard: "Mark as driver card",
+
+    // Driver events
+    driverOperations: "Driver operations",
+    events: "events",
+    login: "Login",
+    logoutEvent: "Logout",
+    driverEventFilters: "Driver event filters",
+    driverSearchPlaceholder: "Card, device, bus, route",
+    eventType: "Event type",
+    allEvents: "All events",
+    driverActivity: "Driver activity",
+    eventTime: "Event time",
+    driverCardNumber: "Driver card number",
+    recordType: "Record type",
 
     // Live map
     locationFeed: "Location feed",
@@ -154,6 +175,7 @@ export const translations = {
     routes: "المسارات",
     buses: "الحافلات",
     cardTypes: "أنواع البطاقات",
+    driverLoginLogout: "تسجيل دخول وخروج السائقين",
     liveMap: "الخريطة المباشرة",
     users: "المستخدمون",
 
@@ -283,6 +305,26 @@ export const translations = {
     // Card types
     fareMedia: "وسائط الأجرة",
     transactionCount: "المعاملات",
+    cardPurpose: "استخدام البطاقة",
+    driverCard: "بطاقة سائق",
+    fareCard: "بطاقة أجرة",
+    driverEvents: "حركات السائق",
+    markAsFareCard: "تعيين كبطاقة أجرة",
+    markAsDriverCard: "تعيين كبطاقة سائق",
+
+    // Driver events
+    driverOperations: "عمليات السائقين",
+    events: "الأحداث",
+    login: "تسجيل دخول",
+    logoutEvent: "تسجيل خروج",
+    driverEventFilters: "مرشحات حركات السائقين",
+    driverSearchPlaceholder: "بطاقة، جهاز، حافلة، مسار",
+    eventType: "نوع الحدث",
+    allEvents: "جميع الأحداث",
+    driverActivity: "نشاط السائقين",
+    eventTime: "وقت الحدث",
+    driverCardNumber: "رقم بطاقة السائق",
+    recordType: "نوع السجل",
 
     // Live map
     locationFeed: "بيانات الموقع",

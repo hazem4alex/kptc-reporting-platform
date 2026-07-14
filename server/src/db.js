@@ -71,6 +71,13 @@ export async function initDb() {
     ALTER TABLE route_change_logs ADD COLUMN IF NOT EXISTS old_bus_number text NULL;
     ALTER TABLE route_change_logs ADD COLUMN IF NOT EXISTS new_bus_number text NULL;
 
+    CREATE TABLE IF NOT EXISTS card_type_definitions (
+      card_type text PRIMARY KEY,
+      is_driver_card boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS transactions (
       id bigserial PRIMARY KEY,
       record_uid text UNIQUE NOT NULL,
@@ -95,6 +102,16 @@ export async function initDb() {
       payload jsonb,
       received_at timestamptz DEFAULT now()
     );
+
+    INSERT INTO card_type_definitions (card_type, is_driver_card)
+    VALUES ('0500', true)
+    ON CONFLICT (card_type) DO NOTHING;
+
+    INSERT INTO card_type_definitions (card_type)
+    SELECT DISTINCT card_type
+    FROM transactions
+    WHERE card_type IS NOT NULL AND btrim(card_type) <> ''
+    ON CONFLICT (card_type) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS bus_locations (
       id bigserial PRIMARY KEY,
@@ -144,6 +161,8 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_transactions_transaction_datetime ON transactions(transaction_datetime DESC);
     CREATE INDEX IF NOT EXISTS idx_transactions_card_no ON transactions(card_no);
     CREATE INDEX IF NOT EXISTS idx_transactions_card_type ON transactions(card_type);
+    CREATE INDEX IF NOT EXISTS idx_transactions_driver_events
+      ON transactions(card_type, record_type, transaction_datetime DESC);
     CREATE INDEX IF NOT EXISTS idx_transactions_received_at ON transactions(received_at DESC);
     CREATE INDEX IF NOT EXISTS idx_bus_locations_device_time ON bus_locations(device_id, location_time DESC, received_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sync_batches_device_created ON sync_batches(device_id, created_at DESC);

@@ -43,6 +43,14 @@ export const api = {
   daily: () => request("/api/reports/daily"),
   devices: () => request("/api/reports/devices"),
   latestTransactions: () => request("/api/reports/transactions?limit=100&offset=0"),
-  cardTypes: () => request("/api/reports/card-types"),
+  financialCardTypes: () => request("/api/reports/card-types"),
+  cardTypes: (token) => request("/api/card-types", { token }),
+  updateCardType: (token, cardType, isDriverCard) =>
+    request(`/api/card-types/${encodeURIComponent(cardType)}`, {
+      method: "PUT",
+      token,
+      body: { is_driver_card: isDriverCard }
+    }),
+  driverEvents: () => request("/api/reports/driver-events?limit=200"),
   locations: () => request("/api/reports/bus-locations/latest")
 };
