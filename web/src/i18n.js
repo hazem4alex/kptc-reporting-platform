@@ -64,6 +64,8 @@ export const translations = {
     delete: "Delete",
     confirmDelete: "Delete this record?",
     edit: "Edit", cancel: "Cancel", close: "Close",
+    refresh: "Refresh",
+    refreshing: "Refreshing...",
 
     // Overview
     opsCommand: "Operations command",
@@ -149,6 +151,7 @@ export const translations = {
     // Stations
     addStation: "Add station",
     editStation: "Edit station",
+    allStations: "All stations",
     stationNameEn: "Station name (EN)",
     stationNameAr: "Station name (AR)",
     latitude: "Latitude",
@@ -194,6 +197,7 @@ export const translations = {
     // Live map
     locationFeed: "Location feed",
     liveMapTitle: "Live Map",
+    busesOnMap: "buses on map",
     mapPlaceholder: "Map integration placeholder",
     locationUnavailable: "Location not available yet",
     scanLocation: "Scan location",
@@ -278,6 +282,8 @@ export const translations = {
     delete: "حذف",
     confirmDelete: "هل تريد حذف هذا السجل؟",
     edit: "تعديل", cancel: "إلغاء", close: "إغلاق",
+    refresh: "تحديث",
+    refreshing: "جاري التحديث...",
 
     // Overview
     opsCommand: "مركز العمليات",
@@ -363,6 +369,7 @@ export const translations = {
     // Stations
     addStation: "إضافة محطة",
     editStation: "تعديل المحطة",
+    allStations: "جميع المحطات",
     stationNameEn: "اسم المحطة بالإنجليزية",
     stationNameAr: "اسم المحطة بالعربية",
     latitude: "خط العرض",
@@ -408,6 +415,7 @@ export const translations = {
     // Live map
     locationFeed: "بيانات الموقع",
     liveMapTitle: "الخريطة المباشرة",
+    busesOnMap: "حافلات على الخريطة",
     mapPlaceholder: "موقع الخريطة قيد التطوير",
     locationUnavailable: "الموقع غير متاح بعد",
     scanLocation: "موقع المسح",

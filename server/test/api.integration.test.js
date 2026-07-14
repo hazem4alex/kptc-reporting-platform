@@ -210,7 +210,25 @@ suite("route/device configuration flow and regression coverage", async (t) => {
     };
     const first = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
     const duplicate = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
+    const duplicateWithNewLocation = await call("/api/transactions/bulk", {
+      method: "POST",
+      auth: false,
+      apiKey: "integration-api-key",
+      body: {
+        ...payload,
+        location: {
+          lat: 29.9999001,
+          lng: 48.9999002,
+          source: "integration-gps-new",
+          accuracy: "gps",
+          location_time: "2026-07-12T10:00:00Z"
+        }
+      }
+    });
     assert.equal(first.response.status, 201); assert.equal(first.json.accepted, 1); assert.equal(duplicate.json.duplicates, 1);
+    assert.equal(duplicateWithNewLocation.response.status, 201);
+    assert.equal(duplicateWithNewLocation.json.accepted, 0);
+    assert.equal(duplicateWithNewLocation.json.duplicates, 1);
   });
 
   await t.test("transaction report includes current bus and route and filters by them", async () => {

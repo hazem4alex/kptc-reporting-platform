@@ -277,7 +277,17 @@ export default function App() {
   const page = useMemo(() => {
     if (!data) return null;
     const isAdmin = session?.user?.role === "admin";
-    if (active === "transactions") return <Transactions rows={data.transactions} locations={data.locations} stations={data.stations} t={t} />;
+    if (active === "transactions") {
+      return (
+        <Transactions
+          rows={data.transactions}
+          locations={data.locations}
+          stations={data.stations}
+          t={t}
+          onRefresh={refreshTransactionsAndLocations}
+        />
+      );
+    }
     if (active === "routes") {
       return (
         <RoutesManagement
@@ -336,8 +346,18 @@ export default function App() {
       );
     }
     if (active === "card-types") return <CardTypes rows={data.cardTypes} t={t} onUpdateCardType={updateCardType} />;
-    if (active === "driver-events") return <DriverEvents rows={data.driverEvents} locations={data.locations} stations={data.stations} t={t} />;
-    if (active === "live-map") return <LiveMap rows={data.locations} t={t} />;
+    if (active === "driver-events") {
+      return (
+        <DriverEvents
+          rows={data.driverEvents}
+          locations={data.locations}
+          stations={data.stations}
+          t={t}
+          onRefresh={refreshDriverEventsAndLocations}
+        />
+      );
+    }
+    if (active === "live-map") return <LiveMap rows={data.locations} t={t} onRefresh={refreshLocations} />;
     if (active === "users") return <Users rows={users} t={t} onCreateUser={createUser} />;
     return <Overview data={data} t={t} />;
   }, [active, data, session, t, users]);
@@ -404,17 +424,69 @@ export default function App() {
   }
 
   async function refreshDriversTransactionsAndEvents() {
-    const [drivers, transactions, driverEvents] = await Promise.all([
+    const [drivers, transactions, driverEvents, locations] = await Promise.all([
       api.drivers(session.token),
       api.latestTransactions(),
-      api.driverEvents()
+      api.driverEvents(),
+      api.locations()
     ]);
     setData((current) => ({
       ...current,
       drivers: drivers.data,
       transactions: transactions.data,
-      driverEvents: driverEvents.data
+      driverEvents: driverEvents.data,
+      locations: locations.data
     }));
+  }
+
+  async function refreshTransactionsAndLocations() {
+    try {
+      const [transactions, locations] = await Promise.all([
+        api.latestTransactions(),
+        api.locations()
+      ]);
+      setData((current) => current ? ({
+        ...current,
+        transactions: transactions.data,
+        locations: locations.data
+      }) : current);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }
+
+  async function refreshDriverEventsAndLocations() {
+    try {
+      const [driverEvents, locations] = await Promise.all([
+        api.driverEvents(),
+        api.locations()
+      ]);
+      setData((current) => current ? ({
+        ...current,
+        driverEvents: driverEvents.data,
+        locations: locations.data
+      }) : current);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }
+
+  async function refreshLocations() {
+    try {
+      const locations = await api.locations();
+      setData((current) => current ? ({
+        ...current,
+        locations: locations.data
+      }) : current);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
   }
 
   async function createRoute(route) {

@@ -711,6 +711,7 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
             $20, $21, $22, $23, $24, $25
           )
           ON CONFLICT (record_uid) DO NOTHING
+          RETURNING true AS inserted
         `,
         [
           recordUid,
@@ -740,9 +741,10 @@ router.post("/api/transactions/bulk", requireApiKey, async (req, res, next) => {
           tx
         ]
       );
-      accepted += result.rowCount;
+      const inserted = result.rows.some((row) => row.inserted);
+      accepted += inserted ? 1 : 0;
 
-      if (result.rowCount > 0 && scanLocation.lat !== null && scanLocation.lng !== null) {
+      if (inserted && scanLocation.lat !== null && scanLocation.lng !== null) {
         await client.query(
           `
             INSERT INTO bus_locations (
@@ -808,6 +810,7 @@ router.post("/api/buses/location", requireApiKey, async (req, res, next) => {
   try {
     const body = req.body || {};
     const deviceId = requiredString(body.device_id, "device_id");
+    const location = normalizeLocation(body);
 
     await pool.query(
       `
@@ -821,6 +824,10 @@ router.post("/api/buses/location", requireApiKey, async (req, res, next) => {
       [deviceId, body.bus_no ?? null, body.route_no ?? null]
     );
 
+    if (location.lat === null || location.lng === null) {
+      return res.status(202).json({ success: true, location_saved: false });
+    }
+
     const result = await pool.query(
       `
         INSERT INTO bus_locations (
@@ -832,16 +839,16 @@ router.post("/api/buses/location", requireApiKey, async (req, res, next) => {
       [
         deviceId,
         body.bus_no ?? null,
-        parseNumeric(body.lat),
-        parseNumeric(body.lng),
-        parseNumeric(body.speed),
-        parseNumeric(body.bearing),
-        body.source ?? null,
-        parseDateTime(body.location_time)
+        location.lat,
+        location.lng,
+        location.speed,
+        location.bearing,
+        location.source,
+        location.locationTime
       ]
     );
 
-    res.status(201).json({ success: true, id: result.rows[0].id });
+    res.status(201).json({ success: true, location_saved: true, id: result.rows[0].id });
   } catch (err) {
     next(err);
   }
@@ -1845,8 +1852,9 @@ router.get("/api/reports/bus-locations/latest", async (req, res, next) => {
     const result = await pool.query(`
       SELECT DISTINCT ON (l.device_id)
         l.device_id,
-        COALESCE(l.bus_no, d.bus_no) AS bus_no,
-        d.route_no,
+        COALESCE(l.bus_no, b.bus_code, d.bus_no) AS bus_no,
+        COALESCE(r.route_code, d.route_no) AS route_no,
+        COALESCE(r.route_name, d.route_name) AS route_name,
         l.lat,
         l.lng,
         l.speed,
@@ -1856,6 +1864,9 @@ router.get("/api/reports/bus-locations/latest", async (req, res, next) => {
         l.received_at
       FROM bus_locations l
       LEFT JOIN devices d ON d.device_id = l.device_id
+      LEFT JOIN buses b ON b.device_id = l.device_id AND b.deleted_at IS NULL
+      LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+      WHERE l.lat IS NOT NULL AND l.lng IS NOT NULL
       ORDER BY l.device_id, l.location_time DESC NULLS LAST, l.received_at DESC
     `);
 

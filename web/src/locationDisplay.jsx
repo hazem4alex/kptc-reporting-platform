@@ -21,14 +21,7 @@ export function buildLatestLocationsByDevice(locations = []) {
 
 export function locationDetails(row, latestLocationsByDevice) {
   if (hasScanLocation(row)) {
-    return {
-      lat: Number(row.scan_lat),
-      lng: Number(row.scan_lng),
-      source: row.scan_location_source || "",
-      accuracy: row.scan_location_accuracy || "",
-      time: row.scan_location_time || row.received_at || "",
-      fromScan: true
-    };
+    return scanLocationDetails(row);
   }
 
   const latest = latestLocationsByDevice?.get(row?.device_id);
@@ -45,6 +38,19 @@ export function locationDetails(row, latestLocationsByDevice) {
     accuracy: latest.accuracy || "",
     time: latest.location_time || latest.received_at || "",
     fromScan: false
+  };
+}
+
+export function scanLocationDetails(row) {
+  if (!hasScanLocation(row)) return null;
+
+  return {
+    lat: Number(row.scan_lat),
+    lng: Number(row.scan_lng),
+    source: row.scan_location_source || "",
+    accuracy: row.scan_location_accuracy || "",
+    time: row.scan_location_time || row.received_at || "",
+    fromScan: true
   };
 }
 

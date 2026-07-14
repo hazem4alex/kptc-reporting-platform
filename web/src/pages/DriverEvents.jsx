@@ -2,11 +2,10 @@ import { useMemo, useState } from "react";
 import { Table } from "../components/Table.jsx";
 import { count, dateTime } from "../format.js";
 import {
-  buildLatestLocationsByDevice,
-  locationDetails,
   locationMethodLabelFromDetails,
   nearestStationText,
   NearestStationCell,
+  scanLocationDetails,
   ScanLocationCell,
   LocationMethodCell
 } from "../locationDisplay.jsx";
@@ -32,13 +31,13 @@ function driverLabel(row) {
   return name || card || "-";
 }
 
-export function DriverEvents({ rows = [], locations = [], stations = [], t }) {
+export function DriverEvents({ rows = [], stations = [], onRefresh, t }) {
   const [query, setQuery] = useState("");
   const [eventType, setEventType] = useState("all");
   const [driver, setDriver] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const latestLocationsByDevice = useMemo(() => buildLatestLocationsByDevice(locations), [locations]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const drivers = useMemo(() => {
     const options = new Map();
@@ -54,7 +53,7 @@ export function DriverEvents({ rows = [], locations = [], stations = [], t }) {
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return rows.filter((row) => {
-      const details = locationDetails(row, latestLocationsByDevice);
+      const details = scanLocationDetails(row);
       if (eventType !== "all" && row.event_type !== eventType) return false;
       if (driver !== "all" && driverKey(row) !== driver) return false;
       const date = eventDate(row);
@@ -81,10 +80,20 @@ export function DriverEvents({ rows = [], locations = [], stations = [], t }) {
         row.record_uid
       ].some((value) => includes(value, normalizedQuery));
     });
-  }, [driver, eventType, from, latestLocationsByDevice, query, rows, stations, t, to]);
+  }, [driver, eventType, from, query, rows, stations, t, to]);
 
   const loginCount = filtered.filter((row) => row.event_type === "login").length;
   const logoutCount = filtered.filter((row) => row.event_type === "logout").length;
+
+  async function handleRefresh() {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   return (
     <section className="page driver-events-page">
@@ -93,9 +102,14 @@ export function DriverEvents({ rows = [], locations = [], stations = [], t }) {
           <p className="eyebrow">{t("driverOperations")}</p>
           <h1>{t("driverLoginLogout")}</h1>
         </div>
-        <div className="transaction-summary">
-          <span>{count(filtered.length)} {t("events")}</span>
-          <strong>{count(loginCount)} {t("login")} · {count(logoutCount)} {t("logoutEvent")}</strong>
+        <div className="page-header-actions">
+          <div className="transaction-summary">
+            <span>{count(filtered.length)} {t("events")}</span>
+            <strong>{count(loginCount)} {t("login")} · {count(logoutCount)} {t("logoutEvent")}</strong>
+          </div>
+          <button className="small-action" disabled={refreshing} type="button" onClick={handleRefresh}>
+            {refreshing ? t("refreshing") : t("refresh")}
+          </button>
         </div>
       </div>
 
@@ -165,9 +179,9 @@ export function DriverEvents({ rows = [], locations = [], stations = [], t }) {
             { key: "bus_number", label: t("busNumber"), render: (row) => row.bus_number || "-" },
             { key: "device_id", label: t("deviceId") },
             { key: "route_name", label: t("routeName"), render: (row) => row.route_name || row.route_no || "-" },
-            { key: "scan_location", label: t("latestLocation"), render: (row) => <ScanLocationCell details={locationDetails(row, latestLocationsByDevice)} t={t} /> },
-            { key: "scan_location_method", label: t("locationMethod"), render: (row) => <LocationMethodCell details={locationDetails(row, latestLocationsByDevice)} t={t} /> },
-            { key: "nearest_station", label: t("nearestStation"), render: (row) => <NearestStationCell details={locationDetails(row, latestLocationsByDevice)} stations={stations} t={t} /> },
+            { key: "scan_location", label: t("scanLocation"), render: (row) => <ScanLocationCell details={scanLocationDetails(row)} t={t} /> },
+            { key: "scan_location_method", label: t("locationMethod"), render: (row) => <LocationMethodCell details={scanLocationDetails(row)} t={t} /> },
+            { key: "nearest_station", label: t("nearestStation"), render: (row) => <NearestStationCell details={scanLocationDetails(row)} stations={stations} t={t} /> },
             { key: "record_type", label: t("recordType") }
           ]}
         />

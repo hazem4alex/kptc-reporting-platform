@@ -797,6 +797,10 @@ main {
   opacity: 0.55;
 }
 
+.small-action:active {
+  transform: translateY(1px);
+}
+
 .muted-action {
   background: transparent;
   color: var(--ink-2);
@@ -825,6 +829,18 @@ main {
   display: flex;
   gap: 18px;
   justify-content: space-between;
+}
+
+.page-header-actions {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.compact-field {
+  min-width: 190px;
 }
 
 /* 14. Hero dashboard ---------------------------------------- */
@@ -941,7 +957,7 @@ h2 {
 }
 
 .transactions-page .filter-panel {
-  grid-template-columns: minmax(220px, 1.4fr) repeat(11, minmax(112px, 1fr));
+  grid-template-columns: minmax(220px, 1.4fr) repeat(12, minmax(112px, 1fr));
 }
 
 /* 18. Segmented control ------------------------------------- */
@@ -1502,21 +1518,96 @@ td:nth-child(4) {
 
 /* 29. Map --------------------------------------------------- */
 
+.live-map-layout {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  width: 100%;
+}
+
 .map-placeholder {
   background: var(--base-2);
   border: 1px solid var(--line);
   border-radius: 6px;
-  min-height: 480px;
+  min-height: 560px;
   overflow: hidden;
   position: relative;
 }
 
-.map-grid {
-  background-image:
-    linear-gradient(rgba(0, 229, 200, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 229, 200, 0.055) 1px, transparent 1px);
-  background-size: 34px 34px;
+.live-map-page .map-placeholder {
+  height: calc(100dvh - 228px);
+  min-height: 620px;
+  width: 100%;
+}
+
+.map-iframe {
+  border: 0;
+  height: 100%;
   inset: 0;
+  min-height: 100%;
+  opacity: 0.9;
+  position: absolute;
+  width: 100%;
+}
+
+.map-marker-layer {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.bus-map-marker {
+  align-items: center;
+  background: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  color: #061316;
+  display: inline-flex;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  max-width: 180px;
+  min-height: 28px;
+  overflow: hidden;
+  padding: 8px 10px;
+  pointer-events: auto;
+  position: absolute;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  transform: translate(-50%, -110%);
+  transition: opacity 160ms ease, transform 160ms ease;
+  white-space: nowrap;
+}
+
+.bus-map-marker::after {
+  background: var(--accent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+  border-right: 1px solid rgba(255, 255, 255, 0.42);
+  bottom: -4px;
+  content: "";
+  height: 8px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+}
+
+.bus-map-marker:hover {
+  color: #061316;
+  opacity: 0.92;
+  transform: translate(-50%, -118%);
+}
+
+.map-empty-overlay {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(3, 10, 16, 0.18), rgba(3, 10, 16, 0.42));
+  display: grid;
+  inset: 0;
+  padding: 20px;
+  place-items: center;
   position: absolute;
 }
 
@@ -1533,12 +1624,17 @@ td:nth-child(4) {
   position: absolute;
   text-transform: uppercase;
   top: 18px;
+  z-index: 2;
 }
 
 .location-list {
   align-content: start;
   display: grid;
   gap: 7px;
+}
+
+.live-map-page .location-list {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .location-row {
@@ -1731,6 +1827,15 @@ td:nth-child(4) {
     white-space: normal;
   }
 
+  .page-header-actions {
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .compact-field {
+    min-width: min(100%, 260px);
+  }
+
   .hero-copy {
     max-width: 100%;
   }
@@ -1817,6 +1922,15 @@ td:nth-child(4) {
   .transaction-summary {
     min-width: 0;
     white-space: normal;
+  }
+
+  .page-header-actions {
+    width: 100%;
+  }
+
+  .live-map-page .map-placeholder {
+    height: calc(100dvh - 260px);
+    min-height: 460px;
   }
 
   .filter-bar,
@@ -1976,6 +2090,10 @@ td:nth-child(4) {
 
 :root[data-theme="light"] .map-placeholder {
   background: #ddeaf4;
+}
+
+:root[data-theme="light"] .map-empty-overlay {
+  background: linear-gradient(180deg, rgba(238, 244, 248, 0.32), rgba(238, 244, 248, 0.72));
 }
 
 :root[data-theme="light"] .map-grid {
