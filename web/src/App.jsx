@@ -4,7 +4,6 @@ import { ErrorState, Loading } from "./components/DataState.jsx";
 import { createTranslator } from "./i18n.js";
 import { CardTypes } from "./pages/CardTypes.jsx";
 import { BusesManagement } from "./pages/BusesManagement.jsx";
-import { Devices } from "./pages/Devices.jsx";
 import { DriversManagement } from "./pages/DriversManagement.jsx";
 import { DriverEvents } from "./pages/DriverEvents.jsx";
 import { LiveMap } from "./pages/LiveMap.jsx";
@@ -143,7 +142,6 @@ function Icon({ name }) {
 const nav = [
   { id: "overview",     label: "overview"     },
   { id: "transactions", label: "transactions" },
-  { id: "devices",      label: "devices"      },
   { id: "routes",       label: "routes"       },
   { id: "stations",     label: "stations"     },
   { id: "buses",        label: "buses"        },
@@ -280,7 +278,6 @@ export default function App() {
     if (!data) return null;
     const isAdmin = session?.user?.role === "admin";
     if (active === "transactions") return <Transactions rows={data.transactions} t={t} />;
-    if (active === "devices") return <Devices rows={data.devices} t={t} />;
     if (active === "routes") {
       return (
         <RoutesManagement

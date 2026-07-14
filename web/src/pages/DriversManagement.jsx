@@ -57,7 +57,8 @@ export function DriversManagement({
   async function submitDriver(event) {
     event.preventDefault();
     setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await onCreateDriver({
         name_en: form.get("name_en"),
@@ -65,7 +66,7 @@ export function DriversManagement({
         phone_number: form.get("phone_number"),
         civil_id: form.get("civil_id")
       });
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (err) {
       setError(err.message);
     }
@@ -74,10 +75,11 @@ export function DriversManagement({
   async function submitCard(event) {
     event.preventDefault();
     setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await onAssignDriverCard(form.get("driver_id"), { card_no: form.get("card_no") });
-      event.currentTarget.reset();
+      formElement.reset();
       setSelectedDriver("");
     } catch (err) {
       setError(err.message);

@@ -31,7 +31,8 @@ export function StationsManagement({
   async function submit(event) {
     event.preventDefault();
     setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await onCreateStation({
         name_en: form.get("name_en"),
@@ -39,7 +40,7 @@ export function StationsManagement({
         latitude: form.get("latitude"),
         longitude: form.get("longitude")
       });
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (err) {
       setError(err.message);
     }

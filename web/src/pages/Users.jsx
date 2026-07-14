@@ -8,7 +8,8 @@ export function Users({ rows = [], onCreateUser, t }) {
   async function submit(event) {
     event.preventDefault();
     setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await onCreateUser({
         username: form.get("username"),
@@ -16,7 +17,7 @@ export function Users({ rows = [], onCreateUser, t }) {
         display_name: form.get("display_name"),
         role: form.get("role")
       });
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (err) {
       setError(err.message);
     }

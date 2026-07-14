@@ -22,10 +22,11 @@ export function BusesManagement({ rows = [], routes = [], isAdmin, onCreateBus, 
 
   async function submit(event) {
     event.preventDefault(); setError(""); setNotice("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const result = await onCreateBus({ device_id: form.get("device_id"), bus_number: form.get("bus_number"), active_route_id: form.get("active_route_id") || null });
-      setNotice(`${t("configurationSaved")} ${result.route_config_version}`); event.currentTarget.reset(); setSelectedRoute("");
+      setNotice(`${t("configurationSaved")} ${result.route_config_version}`); formElement.reset(); setSelectedRoute("");
     } catch (err) { setError(err.message); }
   }
 
@@ -52,7 +53,7 @@ export function BusesManagement({ rows = [], routes = [], isAdmin, onCreateBus, 
     bus_number: row.bus_number || row.bus_code, version: row.route_config_version,
     route_id: row.active_route_id, route_code: row.active_route_code || row.route_code,
     route_name: row.active_route_name || row.route_name, fare_fils: row.fare_fils,
-    fare_kwd: row.fare_kwd, updated_at: row.updated_at });
+    fare_kwd: row.fare_kwd, last_seen_at: row.last_seen_at, updated_at: row.updated_at });
 
   return <section className="page">
     <div className="page-header"><div><p className="eyebrow">{t("deviceRouteConfig")}</p><h1>{t("busesManagement")}</h1></div></div>
@@ -75,7 +76,9 @@ export function BusesManagement({ rows = [], routes = [], isAdmin, onCreateBus, 
           { key: "route_name", label: t("activeRoute"), render: (r) => r.active_route_name || r.route_name || "—" },
           { key: "fare_kwd", label: t("fare"), render: (r) => <span className="fare-stack"><strong>{fare(r.fare_fils)}</strong>{r.fare_fils != null && <small>{r.fare_fils} fils</small>}</span> },
           { key: "is_active", label: t("status"), render: (r) => <span className={r.is_active ? "status-pill active" : "status-pill inactive"}>{r.is_active ? t("active") : t("inactive")}</span> },
-          { key: "route_config_version", label: t("configVersion") }, { key: "updated_at", label: t("updated"), render: (r) => dateTime(r.updated_at) },
+          { key: "route_config_version", label: t("configVersion") },
+          { key: "last_seen_at", label: t("lastSeen"), render: (r) => dateTime(r.last_seen_at) },
+          { key: "updated_at", label: t("updated"), render: (r) => dateTime(r.updated_at) },
           { key: "actions", label: t("actions"), render: (r) => <div className="bus-actions"><select aria-label={t("assignActiveRoute")} value={r.active_route_id || ""} onChange={(e) => e.target.value && assign(r, e.target.value)} disabled={!r.is_active}><option disabled value="">{t("unassigned")}</option>{routes.filter((x) => x.is_active || x.id === r.active_route_id).map((x) => <option key={x.id} value={x.id}>{routeLabel(x)}</option>)}</select><div className="inline-actions compact-actions"><button className="small-action" onClick={() => setEditing(r)} type="button">{t("edit")}</button><button className="small-action muted-action" onClick={() => setDetails(jsonFor(r))} type="button">JSON</button>{isAdmin && <button className="small-action muted-action" type="button" onClick={() => onSetBusStatus(r.id, !r.is_active)}>{r.is_active ? t("deactivate") : t("activate")}</button>}{isAdmin && <button className="small-action danger-action" type="button" onClick={() => deleteBus(r)}>{t("delete")}</button>}</div></div> }
         ]} />
       </section>

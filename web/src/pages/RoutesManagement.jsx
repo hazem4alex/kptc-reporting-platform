@@ -77,12 +77,13 @@ export function RoutesManagement({ rows = [], stations = [], isAdmin, onCreateRo
 
   async function submit(event) {
     event.preventDefault(); setError(""); setSaving(true);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await onCreateRoute({ route_code: form.get("route_code"), route_name: form.get("route_name"),
         fare_fils: Number(form.get("fare_fils")), start_station_id: form.get("start_station_id") || null,
         end_station_id: form.get("end_station_id") || null, is_active: true });
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (err) { setError(err.message); } finally { setSaving(false); }
   }
 

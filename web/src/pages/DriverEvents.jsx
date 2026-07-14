@@ -6,18 +6,57 @@ function includes(value, query) {
   return String(value || "").toLowerCase().includes(query);
 }
 
+function eventDate(row) {
+  return String(row.transaction_datetime_kuwait || row.transaction_datetime || "").slice(0, 10);
+}
+
+function driverKey(row) {
+  return row.driver_id || row.card_no || "";
+}
+
+function driverLabel(row) {
+  const name = row.driver_name_en || row.driver_name_ar || "";
+  const card = row.card_no || "";
+  const civilId = row.driver_civil_id || "";
+  if (name && civilId) return `${name} · ${civilId}`;
+  if (name && card) return `${name} · ${card}`;
+  return name || card || "-";
+}
+
 export function DriverEvents({ rows = [], t }) {
   const [query, setQuery] = useState("");
   const [eventType, setEventType] = useState("all");
+  const [driver, setDriver] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const drivers = useMemo(() => {
+    const options = new Map();
+    for (const row of rows) {
+      const value = driverKey(row);
+      if (value) options.set(value, driverLabel(row));
+    }
+    return Array.from(options.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (eventType !== "all" && row.event_type !== eventType) return false;
+      if (driver !== "all" && driverKey(row) !== driver) return false;
+      const date = eventDate(row);
+      if (from && date < from) return false;
+      if (to && date > to) return false;
       if (!normalizedQuery) return true;
       return [
         row.card_no,
         row.card_type,
+        row.driver_name_en,
+        row.driver_name_ar,
+        row.driver_civil_id,
+        row.driver_phone_number,
         row.device_id,
         row.bus_number,
         row.route_no,
@@ -25,7 +64,7 @@ export function DriverEvents({ rows = [], t }) {
         row.record_uid
       ].some((value) => includes(value, normalizedQuery));
     });
-  }, [eventType, query, rows]);
+  }, [driver, eventType, from, query, rows, to]);
 
   const loginCount = filtered.filter((row) => row.event_type === "login").length;
   const logoutCount = filtered.filter((row) => row.event_type === "logout").length;
@@ -54,12 +93,29 @@ export function DriverEvents({ rows = [], t }) {
           />
         </label>
         <label className="field">
+          <span>{t("driver")}</span>
+          <select value={driver} onChange={(event) => setDriver(event.target.value)}>
+            <option value="all">{t("allDrivers")}</option>
+            {drivers.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
           <span>{t("eventType")}</span>
           <select value={eventType} onChange={(event) => setEventType(event.target.value)}>
             <option value="all">{t("allEvents")}</option>
             <option value="login">{t("login")}</option>
             <option value="logout">{t("logoutEvent")}</option>
           </select>
+        </label>
+        <label className="field">
+          <span>{t("from")}</span>
+          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+        </label>
+        <label className="field">
+          <span>{t("to")}</span>
+          <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
         </label>
       </section>
 
@@ -86,6 +142,7 @@ export function DriverEvents({ rows = [], t }) {
                 </span>
               )
             },
+            { key: "driver", label: t("driver"), render: driverLabel },
             { key: "card_no", label: t("driverCardNumber") },
             { key: "card_type", label: t("cardType") },
             { key: "bus_number", label: t("busNumber"), render: (row) => row.bus_number || "-" },

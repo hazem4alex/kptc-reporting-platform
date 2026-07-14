@@ -74,6 +74,6 @@ export const api = {
       token,
       body: { is_driver_card: isDriverCard }
     }),
-  driverEvents: () => request("/api/reports/driver-events?limit=200"),
+  driverEvents: () => request("/api/reports/driver-events?limit=1000"),
   locations: () => request("/api/reports/bus-locations/latest")
 };

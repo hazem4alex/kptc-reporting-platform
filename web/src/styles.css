@@ -937,7 +937,7 @@ h2 {
 }
 
 .filter-panel.driver-event-filters {
-  grid-template-columns: minmax(240px, 2fr) minmax(160px, 1fr);
+  grid-template-columns: minmax(240px, 1.6fr) minmax(170px, 1fr) minmax(140px, 0.7fr) repeat(2, minmax(140px, 0.7fr));
 }
 
 .transactions-page .filter-panel {
@@ -1372,6 +1372,10 @@ table {
 
 .transactions-page table {
   min-width: 1720px;
+}
+
+.driver-events-page table {
+  min-width: 1220px;
 }
 
 th,

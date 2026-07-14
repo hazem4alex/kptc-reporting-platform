@@ -962,6 +962,7 @@ router.get("/api/buses", requireAuth, async (req, res, next) => {
         b.is_active,
         b.created_at,
         b.updated_at,
+        d.last_seen_at,
         r.route_code,
         r.route_code AS active_route_code,
         r.route_name,
@@ -969,6 +970,7 @@ router.get("/api/buses", requireAuth, async (req, res, next) => {
         r.fare_fils,
         r.is_active AS route_is_active
       FROM buses b
+      LEFT JOIN devices d ON d.device_id = b.device_id
       LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
       WHERE b.deleted_at IS NULL
       ORDER BY b.bus_code ASC
@@ -1021,9 +1023,12 @@ router.post("/api/buses", requireAuth, async (req, res, next) => {
 
     await client.query("COMMIT");
     const configured = await pool.query(
-      `SELECT b.*, b.bus_code AS bus_number, r.route_code, r.route_name, r.fare_fils,
+      `SELECT b.*, b.bus_code AS bus_number, d.last_seen_at, r.route_code, r.route_name, r.fare_fils,
               r.is_active AS route_is_active
-       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL WHERE b.id = $1 AND b.deleted_at IS NULL`,
+       FROM buses b
+       LEFT JOIN devices d ON d.device_id = b.device_id
+       LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+       WHERE b.id = $1 AND b.deleted_at IS NULL`,
       [result.rows[0].id]
     );
     res.status(201).json({ success: true, data: busResponse(configured.rows[0]) });
@@ -1089,9 +1094,12 @@ router.put("/api/buses/:id", requireAuth, async (req, res, next) => {
     }
     await client.query("COMMIT");
     const result = await pool.query(
-      `SELECT b.*, b.bus_code AS bus_number, r.route_code, r.route_name, r.fare_fils,
+      `SELECT b.*, b.bus_code AS bus_number, d.last_seen_at, r.route_code, r.route_name, r.fare_fils,
               r.is_active AS route_is_active
-       FROM buses b LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL WHERE b.id = $1 AND b.deleted_at IS NULL`,
+       FROM buses b
+       LEFT JOIN devices d ON d.device_id = b.device_id
+       LEFT JOIN routes r ON r.id = b.active_route_id AND r.deleted_at IS NULL
+       WHERE b.id = $1 AND b.deleted_at IS NULL`,
       [current.id]
     );
     res.json({ success: true, data: busResponse(result.rows[0]) });
