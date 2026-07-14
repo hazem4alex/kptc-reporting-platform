@@ -42,7 +42,10 @@ export const api = {
   summary: () => request("/api/reports/summary"),
   daily: () => request("/api/reports/daily"),
   devices: () => request("/api/reports/devices"),
-  latestTransactions: () => request("/api/reports/transactions?limit=100&offset=0"),
+  latestTransactions: (params = {}) => {
+    const search = new URLSearchParams({ limit: "100", offset: "0", ...params });
+    return request(`/api/reports/transactions?${search.toString()}`);
+  },
   financialCardTypes: () => request("/api/reports/card-types"),
   cardTypes: (token) => request("/api/card-types", { token }),
   updateCardType: (token, cardType, isDriverCard) =>

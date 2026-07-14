@@ -16,6 +16,7 @@ const busNumber = `9002${suffix}`;
 const driverCardType = `D${suffix}`;
 const driverSignInUid = `driver-sign-in-${suffix}`;
 const driverSignOutUid = `driver-sign-out-${suffix}`;
+const financialRecordUid = `integration-${suffix}`;
 
 async function call(path, { method = "GET", body, auth = true, apiKey } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -98,10 +99,22 @@ suite("route/device configuration flow and regression coverage", async (t) => {
   });
 
   await t.test("bulk transaction upload still accepts and deduplicates records", async () => {
-    const payload = { device_id: deviceId, source_file: "integration-test", transactions: [{ record_uid: `integration-${suffix}`, amount_raw: 250, amount_display_kwd: "0.250" }] };
+    const payload = { device_id: deviceId, source_file: "integration-test", transactions: [{ record_uid: financialRecordUid, amount_raw: 250, amount_display_kwd: "0.250" }] };
     const first = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
     const duplicate = await call("/api/transactions/bulk", { method: "POST", auth: false, apiKey: "integration-api-key", body: payload });
     assert.equal(first.response.status, 201); assert.equal(first.json.accepted, 1); assert.equal(duplicate.json.duplicates, 1);
+  });
+
+  await t.test("transaction report includes current bus and route and filters by them", async () => {
+    const result = await call(`/api/reports/transactions?limit=100&offset=0&bus_number=${encodeURIComponent(busNumber)}&route=${encodeURIComponent(`X${suffix}`)}`, { auth: false });
+    assert.equal(result.response.status, 200);
+    const row = result.json.data.find((item) => item.record_uid === financialRecordUid);
+    assert.ok(row);
+    assert.equal(row.bus_number, busNumber);
+    assert.equal(row.current_route_id, secondRouteId);
+    assert.equal(row.current_route_code, `X${suffix}`);
+    assert.equal(row.current_route_name, "Second Test Route");
+    assert.equal(result.json.summary.amount_total_kwd, 0.25);
   });
 
   await t.test("driver card types are excluded from financial transactions and exposed as driver events", async () => {

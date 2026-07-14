@@ -10,6 +10,17 @@ function includes(value, query) {
   return String(value || "").toLowerCase().includes(query);
 }
 
+function routeKey(row) {
+  return row.current_route_id || row.current_route_code || row.current_route_name || "";
+}
+
+function routeLabel(row) {
+  const code = row.current_route_code || "";
+  const name = row.current_route_name || "";
+  if (code && name && code !== name) return `${code} - ${name}`;
+  return code || name || "-";
+}
+
 function compareDate(a, b, key) {
   return new Date(b[key] || 0) - new Date(a[key] || 0);
 }
@@ -17,17 +28,28 @@ function compareDate(a, b, key) {
 function groupRows(rows, groupBy) {
   const groups = new Map();
   for (const row of rows) {
-    const key = groupBy === "date" ? transactionDate(row) : row[groupBy] || "__unassigned__";
+    const key =
+      groupBy === "date"
+        ? transactionDate(row)
+        : groupBy === "current_route"
+          ? routeLabel(row)
+          : row[groupBy] || "__unassigned__";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   }
   return Array.from(groups.entries()).map(([title, group]) => ({ title, rows: group }));
 }
 
+function sumAmount(rows) {
+  return rows.reduce((total, row) => total + Number(row.amount_corrected || 0), 0);
+}
+
 export function Transactions({ rows = [], t }) {
   const [filters, setFilters] = useState({
     query: "",
     device: "all",
+    bus: "all",
+    route: "all",
     cardType: "all",
     from: "",
     to: "",
@@ -41,17 +63,32 @@ export function Transactions({ rows = [], t }) {
     { value: "amount-desc", labelKey: "amountHighLow" },
     { value: "amount-asc",  labelKey: "amountLowHigh" },
     { value: "time-desc",   labelKey: "txTimeNewest" },
-    { value: "device",      labelKey: "device" }
+    { value: "device",      labelKey: "device" },
+    { value: "bus",         labelKey: "busNumber" },
+    { value: "route",       labelKey: "currentRoute" }
   ];
 
   const groupOptions = [
     { value: "none",      labelKey: "noGrouping" },
     { value: "device_id", labelKey: "device" },
+    { value: "bus_number", labelKey: "busNumber" },
+    { value: "current_route", labelKey: "currentRoute" },
     { value: "card_type", labelKey: "cardType" },
     { value: "date",      labelKey: "date" }
   ];
 
   const devices = useMemo(() => Array.from(new Set(rows.map((row) => row.device_id).filter(Boolean))).sort(), [rows]);
+  const buses = useMemo(() => Array.from(new Set(rows.map((row) => row.bus_number).filter(Boolean))).sort(), [rows]);
+  const routes = useMemo(() => {
+    const options = new Map();
+    for (const row of rows) {
+      const value = routeKey(row);
+      if (value) options.set(value, routeLabel(row));
+    }
+    return Array.from(options.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows]);
   const cardTypes = useMemo(() => Array.from(new Set(rows.map((row) => row.card_type).filter(Boolean))).sort(), [rows]);
 
   const filteredRows = useMemo(() => {
@@ -62,6 +99,9 @@ export function Transactions({ rows = [], t }) {
       .filter((row) => {
         if (query && ![
           row.device_id,
+          row.bus_number,
+          row.current_route_code,
+          row.current_route_name,
           row.record_uid,
           row.card_no,
           row.card_type,
@@ -70,6 +110,8 @@ export function Transactions({ rows = [], t }) {
           return false;
         }
         if (filters.device !== "all" && row.device_id !== filters.device) return false;
+        if (filters.bus !== "all" && row.bus_number !== filters.bus) return false;
+        if (filters.route !== "all" && routeKey(row) !== filters.route) return false;
         if (filters.cardType !== "all" && row.card_type !== filters.cardType) return false;
         if (filters.from && transactionDate(row) < filters.from) return false;
         if (filters.to && transactionDate(row) > filters.to) return false;
@@ -77,10 +119,12 @@ export function Transactions({ rows = [], t }) {
         return true;
       })
       .sort((a, b) => {
-        if (filters.sort === "amount-desc") return Number(b.amount_display_kwd || 0) - Number(a.amount_display_kwd || 0);
-        if (filters.sort === "amount-asc") return Number(a.amount_display_kwd || 0) - Number(b.amount_display_kwd || 0);
+        if (filters.sort === "amount-desc") return Number(b.amount_corrected || 0) - Number(a.amount_corrected || 0);
+        if (filters.sort === "amount-asc") return Number(a.amount_corrected || 0) - Number(b.amount_corrected || 0);
         if (filters.sort === "time-desc") return String(b.transaction_datetime_kuwait || "").localeCompare(String(a.transaction_datetime_kuwait || ""));
         if (filters.sort === "device") return String(a.device_id || "").localeCompare(String(b.device_id || ""));
+        if (filters.sort === "bus") return String(a.bus_number || "").localeCompare(String(b.bus_number || ""));
+        if (filters.sort === "route") return routeLabel(a).localeCompare(routeLabel(b));
         return compareDate(a, b, "received_at") || Number(b.id || 0) - Number(a.id || 0);
       });
   }, [filters, rows]);
@@ -93,7 +137,7 @@ export function Transactions({ rows = [], t }) {
     }));
   }, [filteredRows, filters.groupBy, t]);
 
-  const totalAmount = filteredRows.reduce((total, row) => total + Number(row.amount_display_kwd || 0), 0);
+  const totalAmount = sumAmount(filteredRows);
 
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -108,7 +152,7 @@ export function Transactions({ rows = [], t }) {
         </div>
         <div className="transaction-summary">
           <span>{count(filteredRows.length)} {t("rows")}</span>
-          <strong>{kwd(totalAmount)}</strong>
+          <strong>{t("amountTotal")}: {kwd(totalAmount)}</strong>
         </div>
       </div>
 
@@ -127,6 +171,20 @@ export function Transactions({ rows = [], t }) {
           <select value={filters.device} onChange={(event) => updateFilter("device", event.target.value)}>
             <option value="all">{t("allDevices")}</option>
             {devices.map((device) => <option key={device} value={device}>{device}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>{t("busNumber")}</span>
+          <select value={filters.bus} onChange={(event) => updateFilter("bus", event.target.value)}>
+            <option value="all">{t("allBuses")}</option>
+            {buses.map((bus) => <option key={bus} value={bus}>{bus}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>{t("currentRoute")}</span>
+          <select value={filters.route} onChange={(event) => updateFilter("route", event.target.value)}>
+            <option value="all">{t("allCurrentRoutes")}</option>
+            {routes.map((route) => <option key={route.value} value={route.value}>{route.label}</option>)}
           </select>
         </label>
         <label className="field">
@@ -177,7 +235,7 @@ export function Transactions({ rows = [], t }) {
           <section className="panel" key={group.title}>
             <div className="panel-heading">
               <h2>{group.title}</h2>
-              <span>{count(group.rows.length)} {t("rows")}</span>
+              <span>{count(group.rows.length)} {t("rows")} · {t("amountTotal")}: {kwd(sumAmount(group.rows))}</span>
             </div>
             <Table
               rows={group.rows}
@@ -186,6 +244,8 @@ export function Transactions({ rows = [], t }) {
                 { key: "transaction_datetime_kuwait", label: t("transactionTime"), render: (row) => row.transaction_datetime_kuwait || "-" },
                 { key: "received_at", label: t("uploadTime"), render: (row) => dateTime(row.received_at) },
                 { key: "device_id", label: t("device") },
+                { key: "bus_number", label: t("busNumber"), render: (row) => row.bus_number || "-" },
+                { key: "current_route", label: t("currentRoute"), render: (row) => routeLabel(row) },
                 { key: "record_uid", label: t("recordUid") },
                 { key: "card_no", label: t("card") },
                 { key: "card_type", label: t("type") },

@@ -929,7 +929,14 @@ router.get("/api/reports/transactions", async (req, res, next) => {
   try {
     const limit = parsePositiveInt(req.query.limit, 100);
     const offset = parsePositiveInt(req.query.offset, 0, 1000000);
-    const { device_id: deviceId, card_no: cardNo, from, to } = req.query;
+    const {
+      device_id: deviceId,
+      card_no: cardNo,
+      from,
+      to,
+      bus_number: busNumber
+    } = req.query;
+    const routeFilter = req.query.route ?? req.query.route_no ?? req.query.route_name;
 
     const rows = await pool.query(
       `
@@ -939,15 +946,23 @@ router.get("/api/reports/transactions", async (req, res, next) => {
             t.card_expiry, t.counter, t.balance_raw, t.balance_display_kwd, t.amount_raw,
             t.amount_display_kwd, t.amount_copy_raw, t.transaction_datetime,
             t.transaction_datetime_raw, t.record_type, t.sub_type, t.crc, t.source_file, t.received_at,
+            COALESCE(b.bus_code, d.bus_no) AS bus_number,
+            b.active_route_id AS current_route_id,
+            COALESCE(r.route_code, d.route_no) AS current_route_code,
+            COALESCE(r.route_name, d.route_name) AS current_route_name,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions t
           LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+          LEFT JOIN devices d ON d.device_id = t.device_id
+          LEFT JOIN buses b ON b.device_id = t.device_id
+          LEFT JOIN routes r ON r.id = b.active_route_id
           WHERE NOT COALESCE(c.is_driver_card, false)
         )
         SELECT
           id, record_uid, device_id, record_index, sequence_no, card_no, card_type,
           card_expiry, counter, balance_raw, balance_display_kwd, amount_raw,
           amount_display_kwd, amount_copy_raw, transaction_datetime,
+          bus_number, current_route_id, current_route_code, current_route_name,
           transaction_datetime_raw,
           to_char(transaction_datetime_kuwait_ts, 'YYYY-MM-DD HH24:MI:SS') AS transaction_datetime_kuwait,
           record_type, sub_type, crc, source_file, received_at
@@ -956,10 +971,17 @@ router.get("/api/reports/transactions", async (req, res, next) => {
           AND ($2::text IS NULL OR card_no = $2)
           AND ($3::date IS NULL OR transaction_datetime_kuwait_ts::date >= $3::date)
           AND ($4::date IS NULL OR transaction_datetime_kuwait_ts::date <= $4::date)
+          AND ($5::text IS NULL OR bus_number = $5)
+          AND (
+            $6::text IS NULL
+            OR current_route_id = $6
+            OR current_route_code = $6
+            OR current_route_name = $6
+          )
         ORDER BY id DESC
-        LIMIT $5 OFFSET $6
+        LIMIT $7 OFFSET $8
       `,
-      [deviceId || null, cardNo || null, from || null, to || null, limit, offset]
+      [deviceId || null, cardNo || null, from || null, to || null, busNumber || null, routeFilter || null, limit, offset]
     );
 
     const count = await pool.query(
@@ -968,19 +990,45 @@ router.get("/api/reports/transactions", async (req, res, next) => {
           SELECT
             t.device_id,
             t.card_no,
+            t.amount_raw,
+            COALESCE(b.bus_code, d.bus_no) AS bus_number,
+            b.active_route_id AS current_route_id,
+            COALESCE(r.route_code, d.route_no) AS current_route_code,
+            COALESCE(r.route_name, d.route_name) AS current_route_name,
             ${rawWithDeviceOffsetSql} AS transaction_datetime_kuwait_ts
           FROM transactions t
           LEFT JOIN card_type_definitions c ON c.card_type = t.card_type
+          LEFT JOIN devices d ON d.device_id = t.device_id
+          LEFT JOIN buses b ON b.device_id = t.device_id
+          LEFT JOIN routes r ON r.id = b.active_route_id
           WHERE NOT COALESCE(c.is_driver_card, false)
         )
-        SELECT COUNT(*)::bigint AS total
+        SELECT
+          COUNT(*)::bigint AS total,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN amount_raw IS NULL THEN 0
+                WHEN amount_raw = 25 THEN amount_raw::numeric / 100
+                ELSE amount_raw::numeric / 1000
+              END
+            ),
+            0
+          )::numeric(14,3) AS amount_total_kwd
         FROM normalized
         WHERE ($1::text IS NULL OR device_id = $1)
           AND ($2::text IS NULL OR card_no = $2)
           AND ($3::date IS NULL OR transaction_datetime_kuwait_ts::date >= $3::date)
           AND ($4::date IS NULL OR transaction_datetime_kuwait_ts::date <= $4::date)
+          AND ($5::text IS NULL OR bus_number = $5)
+          AND (
+            $6::text IS NULL
+            OR current_route_id = $6
+            OR current_route_code = $6
+            OR current_route_name = $6
+          )
       `,
-      [deviceId || null, cardNo || null, from || null, to || null]
+      [deviceId || null, cardNo || null, from || null, to || null, busNumber || null, routeFilter || null]
     );
 
     res.json({
@@ -996,6 +1044,9 @@ router.get("/api/reports/transactions", async (req, res, next) => {
         limit,
         offset,
         total: Number(count.rows[0].total)
+      },
+      summary: {
+        amount_total_kwd: Number(count.rows[0].amount_total_kwd || 0)
       }
     });
   } catch (err) {
