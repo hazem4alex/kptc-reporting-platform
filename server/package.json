@@ -9,6 +9,7 @@
     "dev": "node --watch src/index.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
+    "import:kptc-stations": "node scripts/import-kptc-stations.js",
     "test": "node --test --test-concurrency=1"
   },
   "dependencies": {
